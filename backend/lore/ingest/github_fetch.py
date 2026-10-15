@@ -25,7 +25,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 import httpx
 
@@ -146,28 +146,66 @@ def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-class Checkpoint:
-    """Partial progress of one long step, kept in <output>.partial.json until the step finishes.
+class ItemStream:
+    """Streams a long step's items to disk as they complete, so memory holds one page at most.
 
-    `key` identifies the run's parameters (the since date); a checkpoint saved
-    with a different key is ignored, so changing --since never mixes windows.
+    <out>.partial.jsonl gets one finished item per line (email-scrubbed);
+    <out>.partial.state.json holds {key, after, listed}: the page cursor and
+    whether paging finished. A rerun skips ids already in the .jsonl and resumes
+    at the saved cursor. `key` is the since date: a different --since starts over.
+    finish() streams the lines into <out> as a JSON array and removes the partials.
     """
 
-    def __init__(self, path: Path, key: str):
-        self.path, self.key = path, key
-        self.state: dict[str, Any] = {}
-        if path.exists():
-            saved = read_json(path)
-            if saved.get("key") == key:
-                self.state = saved
+    def __init__(self, out: Path, key: str):
+        self.out, self.key = out, key
+        self.items_path = out.with_suffix(".partial.jsonl")
+        self.state_path = out.with_suffix(".partial.state.json")
+        self.state: dict[str, Any] = read_json(self.state_path) if self.state_path.exists() else {}
+        if self.state.get("key") != key:
+            self.clear()
+        self.done_ids: set[str] = set()
+        if self.items_path.exists():
+            self._drop_torn_line()
+            with self.items_path.open(encoding="utf-8") as f:
+                self.done_ids = {json.loads(line)["id"] for line in f if line.strip()}
 
-    def save(self, **fields: Any) -> None:
-        self.state.update(fields, key=self.key)
-        write_json(self.path, self.state)
+    def _drop_torn_line(self) -> None:
+        """A kill mid-write can leave a last line without its newline; cut it off."""
+        data = self.items_path.read_bytes()
+        if data and not data.endswith(b"\n"):
+            self.items_path.write_bytes(data[: data.rfind(b"\n") + 1])
+
+    def append(self, item: dict) -> None:
+        self.out.parent.mkdir(parents=True, exist_ok=True)
+        with self.items_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(scrub(item), ensure_ascii=False) + "\n")
+        self.done_ids.add(item["id"])
+
+    def save_cursor(self, after: str | None, listed: bool = False) -> None:
+        self.state = {"key": self.key, "after": after, "listed": listed}
+        write_json(self.state_path, self.state)
+
+    def finish(self) -> int:
+        tmp = self.out.with_suffix(".json.tmp")
+        n = 0
+        with tmp.open("w", encoding="utf-8") as dst:
+            dst.write("[")
+            if self.items_path.exists():
+                with self.items_path.open(encoding="utf-8") as src:
+                    for line in src:
+                        if line.strip():
+                            dst.write(("," if n else "") + "\n" + line.rstrip("\n"))
+                            n += 1
+            dst.write("\n]\n")
+        os.replace(tmp, self.out)
+        self.clear()
+        return n
 
     def clear(self) -> None:
         self.state = {}
-        self.path.unlink(missing_ok=True)
+        self.done_ids = set()
+        self.items_path.unlink(missing_ok=True)
+        self.state_path.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -254,28 +292,59 @@ class GitHub:
         stop: Callable[[dict], bool] | None = None,
         page_size: int = 50,
         label: str = "",
-        checkpoint: Checkpoint | None = None,
     ) -> list[dict[str, Any]]:
-        """Follow a connection at `path` (e.g. ["repository", "pullRequests"]).
+        """Follow a connection at `path` (e.g. ["repository", "releases"]) into a list.
 
-        `stop(node)` ends paging at the first node it returns True for (that node is
-        excluded). Page size halves when GitHub keeps timing out on a heavy page.
-        With a checkpoint, nodes and the cursor are saved after every page and a
-        rerun resumes from them.
+        For small connections; big ones go through stream(). `stop(node)` ends
+        paging at the first node it returns True for (that node is excluded).
         """
-        state = checkpoint.state if checkpoint else {}
-        nodes: list[dict] = state.get("nodes", [])
-        after = state.get("after")
-        if state.get("listed"):
-            return nodes
-        if nodes:
-            self.log(f"  {label}: resuming after {len(nodes)}")
+        nodes: list[dict] = []
+        for page in self._pages(query, variables, path, page_size, label, None):
+            for node in page["nodes"]:
+                if stop and stop(node):
+                    return nodes
+                nodes.append(node)
+            if label:
+                self.log(f"  {label}: {len(nodes)}")
+        return nodes
 
-        def done() -> list[dict]:
-            if checkpoint:
-                checkpoint.save(nodes=nodes, after=after, listed=True)
-            return nodes
+    def stream(
+        self,
+        query: str,
+        variables: dict[str, Any],
+        path: list[str],
+        out: ItemStream,
+        complete: Callable[[dict], None],
+        stop: Callable[[dict], bool] | None = None,
+        page_size: int = 50,
+        label: str = "",
+    ) -> None:
+        """Like paginate, but each node is completed (complete(node)) and written to `out`
+        straight away, and the cursor is saved after every page. Resumes from `out`."""
+        if out.state.get("listed"):
+            return
+        after = out.state.get("after")
+        if out.done_ids:
+            self.log(f"  {label}: resuming, {len(out.done_ids)} already saved")
+        for page in self._pages(query, variables, path, page_size, label, after):
+            for node in page["nodes"]:
+                if stop and stop(node):
+                    out.save_cursor(after, listed=True)
+                    return
+                if node["id"] in out.done_ids:
+                    continue
+                complete(node)
+                out.append(node)
+            self.log(f"  {label}: {len(out.done_ids)}")
+            if page["pageInfo"]["hasNextPage"]:
+                after = page["pageInfo"]["endCursor"]
+                out.save_cursor(after)
+        out.save_cursor(after, listed=True)
 
+    def _pages(self, query: str, variables: dict[str, Any], path: list[str], page_size: int, label: str,
+               after: str | None) -> Iterator[dict[str, Any]]:
+        """Yield each page of the connection at `path`. Page size halves when GitHub
+        keeps timing out on a heavy page."""
         while True:
             try:
                 data = self.graphql(query, {**variables, "first": page_size, "after": after})
@@ -288,17 +357,10 @@ class GitHub:
             conn = data
             for key in path:
                 conn = conn[key]
-            for node in conn["nodes"]:
-                if stop and stop(node):
-                    return done()
-                nodes.append(node)
-            if label:
-                self.log(f"  {label}: {len(nodes)}")
+            yield conn
             if not conn["pageInfo"]["hasNextPage"]:
-                return done()
+                return
             after = conn["pageInfo"]["endCursor"]
-            if checkpoint:
-                checkpoint.save(nodes=nodes, after=after, listed=False)
 
 
 # ---------------------------------------------------------------------------
@@ -449,37 +511,20 @@ def list_org_repos(gh: GitHub, org: str, since: datetime) -> list[str]:
     ]
 
 
-def _complete_all(gh: GitHub, typename: str, nodes: list[dict], nested: dict, cp: Checkpoint | None, label: str) -> list[dict]:
-    """_complete_nested on every node, marking finished ones with _done and saving every 25."""
-    todo = [n for n in nodes if not n.get("_done")]
-    if cp and len(todo) < len(nodes):
-        gh.log(f"  {label}: {len(nodes) - len(todo)} already complete, {len(todo)} to go")
-    for i, node in enumerate(todo, 1):
-        _complete_nested(gh, typename, node, nested)
-        node["_done"] = True
-        if cp and i % 25 == 0:
-            cp.save(nodes=nodes)
-            gh.log(f"  {label} completed: {len(nodes) - len(todo) + i}/{len(nodes)}")
-    for node in nodes:
-        node.pop("_done", None)
-    return nodes
-
-
-def fetch_prs(gh: GitHub, owner: str, name: str, since: datetime, cp: Checkpoint | None = None) -> list[dict]:
+def fetch_prs(gh: GitHub, owner: str, name: str, since: datetime, out: ItemStream) -> None:
     cutoff = since.timestamp()
-    prs = gh.paginate(
-        PRS_QUERY, {"owner": owner, "name": name}, ["repository", "pullRequests"],
-        stop=lambda n: iso_to_epoch(n["updatedAt"]) < cutoff, page_size=20, label="PRs", checkpoint=cp,
+    gh.stream(
+        PRS_QUERY, {"owner": owner, "name": name}, ["repository", "pullRequests"], out,
+        complete=lambda n: _complete_nested(gh, "PullRequest", n, PR_NESTED),
+        stop=lambda n: iso_to_epoch(n["updatedAt"]) < cutoff, page_size=20, label="PRs",
     )
-    return _complete_all(gh, "PullRequest", prs, PR_NESTED, cp, "PRs")
 
 
-def fetch_issues(gh: GitHub, owner: str, name: str, since: datetime, cp: Checkpoint | None = None) -> list[dict]:
-    issues = gh.paginate(
-        ISSUES_QUERY, {"owner": owner, "name": name, "since": since.isoformat()},
-        ["repository", "issues"], page_size=50, label="issues", checkpoint=cp,
+def fetch_issues(gh: GitHub, owner: str, name: str, since: datetime, out: ItemStream) -> None:
+    gh.stream(
+        ISSUES_QUERY, {"owner": owner, "name": name, "since": since.isoformat()}, ["repository", "issues"], out,
+        complete=lambda n: _complete_nested(gh, "Issue", n, ISSUE_NESTED), page_size=50, label="issues",
     )
-    return _complete_all(gh, "Issue", issues, ISSUE_NESTED, cp, "issues")
 
 
 def fetch_releases(gh: GitHub, owner: str, name: str) -> list[dict]:
@@ -545,9 +590,10 @@ query($owner: String!, $name: String!, $ref: String!, {var_decls}) {{
 # Git (commits)
 # ---------------------------------------------------------------------------
 
-def _git(git_dir: Path, *args: str) -> str:
+def _git(git_dir: Path, *args: str, stdin: str | None = None, env: dict[str, str] | None = None) -> str:
     cmd = ["git", "-C", str(git_dir), "-c", "core.quotepath=false", "-c", "i18n.logOutputEncoding=UTF-8", *args]
-    res = subprocess.run(cmd, capture_output=True)
+    res = subprocess.run(cmd, capture_output=True, input=stdin.encode() if stdin is not None else None,
+                         env={**os.environ, **env} if env else None)
     if res.returncode != 0:
         raise RuntimeError(f"git {' '.join(args[:2])} failed: {res.stderr.decode('utf-8', 'replace')[:500]}")
     return res.stdout.decode("utf-8", "replace")
@@ -572,8 +618,46 @@ def ensure_clone(owner: str, name: str, refresh: bool, log: Callable[[str], None
     return git_dir
 
 
+def raw_blob_ids(raw: str) -> set[str]:
+    """Blob ids (old and new side) in `git log --raw --no-abbrev` output, minus submodules and the null id."""
+    oids: set[str] = set()
+    for line in raw.splitlines():
+        if not line.startswith(":"):
+            continue
+        old_mode, new_mode, old_oid, new_oid = line[1:].split("\t", 1)[0].split()[:4]
+        if old_mode != "160000":  # 160000 = submodule pointer, not a blob
+            oids.add(old_oid)
+        if new_mode != "160000":
+            oids.add(new_oid)
+    oids.discard("0" * 40)
+    return oids
+
+
+def prefetch_blobs(git_dir: Path, branches: list[str], since: datetime, log: Callable[[str], None]) -> None:
+    """Download, in bulk, the blobs `git log --numstat` needs to count lines.
+
+    A blobless clone has no file contents, and --numstat would fetch them lazily,
+    one request per commit (thousands of round trips and pack files). `--raw` lists
+    each change's old and new blob ids without needing the blobs, so we ask for all
+    the missing ones in a few `git fetch --stdin` calls instead.
+    """
+    raw = _git(git_dir, "log", *[f"origin/{b}" for b in branches], f"--since={since.isoformat()}",
+               "--raw", "--no-abbrev", "--no-renames", "--format=")
+    oids = raw_blob_ids(raw)
+    check = _git(git_dir, "cat-file", "--batch-check", stdin="\n".join(sorted(oids)) + "\n",
+                 env={"GIT_NO_LAZY_FETCH": "1"})
+    missing = [l.split()[0] for l in check.splitlines() if l.endswith(" missing")]
+    log(f"  blobs: {len(oids)} needed, {len(missing)} to fetch")
+    for start in range(0, len(missing), 2000):
+        _git(git_dir, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "origin", "--no-tags",
+             "--no-write-fetch-head", "--recurse-submodules=no", "--filter=blob:none", "--stdin",
+             stdin="\n".join(missing[start:start + 2000]) + "\n")
+        log(f"  blobs fetched: {min(start + 2000, len(missing))}/{len(missing)}")
+
+
 def read_commits(git_dir: Path, branches: Iterable[str], since: datetime) -> list[dict]:
-    """Commits on each branch since `since`, deduped by sha, with a `branches` list."""
+    """Commits on each branch since `since`, deduped by sha, with a `branches` list.
+    Call prefetch_blobs first in a blobless clone."""
     by_sha: dict[str, dict] = {}
     for branch in branches:
         out = _git(
@@ -655,30 +739,32 @@ def fetch_repo(gh: GitHub, owner: str, name: str, since: datetime, refresh: bool
     log = gh.log
     log(f"== {owner}/{name} (since {since.date()})")
 
-    def step(filename: str, fn: Callable[[], Any], cp: Checkpoint | None = None) -> Any:
-        """Run fn unless its output is cached. A step given a checkpoint resumes a failed run."""
+    def step(filename: str, fn: Callable[[], Any]) -> None:
+        """Run fn and write its result unless the file is cached (cached files aren't read back)."""
         path = d / filename
         if path.exists() and not refresh:
             log(f"  {filename}: cached")
-            return read_json(path)
-        if cp and refresh:
-            cp.clear()
-        result = fn()
-        write_json(path, result)
-        if cp:
-            cp.clear()
+            return
+        write_json(path, fn())
         log(f"  {filename}: written")
-        return result
 
-    def checkpoint(filename: str) -> Checkpoint:
-        return Checkpoint(d / filename.replace(".json", ".partial.json"), since.isoformat())
+    def stream_step(filename: str, fn: Callable[[ItemStream], None]) -> None:
+        """Like step, for big lists: fn writes items to an ItemStream, which resumes a failed run."""
+        path = d / filename
+        if path.exists() and not refresh:
+            log(f"  {filename}: cached")
+            return
+        out = ItemStream(path, since.isoformat())
+        if refresh:
+            out.clear()
+        fn(out)
+        log(f"  {filename}: written ({out.finish()} items)")
 
-    meta = step("repo.json", lambda: {**gh.graphql(REPO_QUERY, {"owner": owner, "name": name})["repository"],
-                                      "since": since.isoformat(), "fetched_at": int(time.time())})
-    default_branch = meta["defaultBranchRef"]["name"]
-    prs_cp, issues_cp = checkpoint("prs.json"), checkpoint("issues.json")
-    step("prs.json", lambda: fetch_prs(gh, owner, name, since, prs_cp), prs_cp)
-    step("issues.json", lambda: fetch_issues(gh, owner, name, since, issues_cp), issues_cp)
+    step("repo.json", lambda: {**gh.graphql(REPO_QUERY, {"owner": owner, "name": name})["repository"],
+                               "since": since.isoformat(), "fetched_at": int(time.time())})
+    default_branch = read_json(d / "repo.json")["defaultBranchRef"]["name"]
+    stream_step("prs.json", lambda out: fetch_prs(gh, owner, name, since, out))
+    stream_step("issues.json", lambda out: fetch_issues(gh, owner, name, since, out))
     step("releases.json", lambda: fetch_releases(gh, owner, name))
     step("codeowners.json", lambda: fetch_codeowners(gh, owner, name))
 
@@ -688,6 +774,7 @@ def fetch_repo(gh: GitHub, owner: str, name: str, since: datetime, refresh: bool
     branches = [default_branch] + EXTRA_BRANCHES.get(f"{owner}/{name}", [])
 
     def commits() -> dict:
+        prefetch_blobs(git_dir, branches, since, log)
         cs = read_commits(git_dir, branches, since)
         counts = assign_logins(cs, lookup_commit_logins(gh, owner, name, [c["sha"] for c in cs]))
         log(f"  commit logins: {counts}")

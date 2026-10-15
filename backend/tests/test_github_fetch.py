@@ -2,8 +2,8 @@ import pytest
 
 import lore.ingest.github_fetch as gf
 from lore.ingest.github_fetch import (
-    Checkpoint,
     GitHub,
+    ItemStream,
     GIT_LOG_FORMAT,
     is_doc_path,
     login_from_noreply,
@@ -68,49 +68,75 @@ def test_parse_git_log():
 
 
 class FakeGitHub(GitHub):
-    """Serves PR pages of 2 from `prs`; raises once when asked for page `fail_page`."""
+    """Serves PR pages of 2 from `prs` and records which pages were asked for."""
 
-    def __init__(self, prs, fail_page=None):
-        self.log, self.calls, self.prs, self.fail_page, self.pages_served = (lambda m: None), 0, prs, fail_page, []
+    def __init__(self, prs):
+        self.log, self.calls, self.prs, self.pages_served = (lambda m: None), 0, prs, []
 
     def graphql(self, query, variables=None):
         start = int(variables["after"] or 0)
-        if start // 2 == self.fail_page:
-            self.fail_page = None
-            raise RuntimeError("network down")
         self.pages_served.append(start // 2)
-        page = self.prs[start:start + 2]
+        page = [dict(n) for n in self.prs[start:start + 2]]
         has_next = start + 2 < len(self.prs)
         return {"repository": {"pullRequests": {
             "nodes": page, "pageInfo": {"hasNextPage": has_next, "endCursor": str(start + 2)}}}}
 
 
-def test_paginate_resumes_from_checkpoint(tmp_path):
-    prs = [{"number": n} for n in range(5)]
-    cp = Checkpoint(tmp_path / "prs.partial.json", "2025-01-01")
-    gh = FakeGitHub(prs, fail_page=1)
+def _stream(gh, out, fail_on=None):
+    def complete(node):
+        if node["id"] == fail_on:
+            raise RuntimeError("killed")
+        node["done"] = True
+    gh.stream("q", {}, ["repository", "pullRequests"], out, complete=complete)
+
+
+def test_stream_resumes_mid_page(tmp_path):
+    prs = [{"id": f"PR_{n}", "body": f"mail me at u{n}@example.com"} for n in range(5)]
+    out_path = tmp_path / "prs.json"
+    gh = FakeGitHub(prs)
     with pytest.raises(RuntimeError):
-        gh.paginate("q", {}, ["repository", "pullRequests"], checkpoint=cp)
+        _stream(gh, ItemStream(out_path, "2025-01-01"), fail_on="PR_3")  # dies inside page 1
 
-    cp = Checkpoint(tmp_path / "prs.partial.json", "2025-01-01")  # fresh process
-    assert [n["number"] for n in cp.state["nodes"]] == [0, 1]
-    nodes = gh.paginate("q", {}, ["repository", "pullRequests"], checkpoint=cp)
-    assert [n["number"] for n in nodes] == [0, 1, 2, 3, 4]
-    assert gh.pages_served == [0, 1, 2]  # page 0 not re-fetched
-    assert Checkpoint(tmp_path / "prs.partial.json", "2025-01-01").state["listed"] is True
-
-
-def test_checkpoint_ignored_when_since_changes(tmp_path):
-    Checkpoint(tmp_path / "x.partial.json", "2025-01-01").save(nodes=[{"number": 1}])
-    assert Checkpoint(tmp_path / "x.partial.json", "2024-01-01").state == {}
+    out = ItemStream(out_path, "2025-01-01")  # fresh process
+    assert out.done_ids == {"PR_0", "PR_1", "PR_2"} and out.state["after"] == "2"
+    _stream(gh, out)
+    assert gh.pages_served == [0, 1, 1, 2]  # page 0 not re-fetched; page 1 re-read, PR_2 skipped
+    assert out.finish() == 5
+    items = gf.read_json(out_path)
+    assert [i["id"] for i in items] == [f"PR_{n}" for n in range(5)]
+    assert all(i["done"] and "[email]" in i["body"] for i in items)
+    assert not (tmp_path / "prs.partial.jsonl").exists() and not (tmp_path / "prs.partial.state.json").exists()
 
 
-def test_complete_all_skips_done_nodes(tmp_path, monkeypatch):
-    seen = []
-    monkeypatch.setattr(gf, "_complete_nested", lambda gh, t, node, nested: seen.append(node["number"]))
-    nodes = [{"number": 1, "_done": True}, {"number": 2}]
-    out = gf._complete_all(FakeGitHub([]), "PullRequest", nodes, {}, None, "PRs")
-    assert seen == [2] and all("_done" not in n for n in out)
+def test_stream_drops_torn_last_line(tmp_path):
+    out = ItemStream(tmp_path / "prs.json", "k")
+    out.append({"id": "PR_0"})
+    out.save_cursor(None)
+    with (tmp_path / "prs.partial.jsonl").open("a", encoding="utf-8") as f:
+        f.write('{"id": "PR_1", "bo')  # killed mid-write
+    out = ItemStream(tmp_path / "prs.json", "k")
+    assert out.done_ids == {"PR_0"}
+    out.append({"id": "PR_1"})
+    assert out.finish() == 2
+
+
+def test_stream_restarts_when_since_changes(tmp_path):
+    out = ItemStream(tmp_path / "prs.json", "2025-01-01")
+    out.append({"id": "PR_0"})
+    out.save_cursor("2")
+    out = ItemStream(tmp_path / "prs.json", "2024-01-01")
+    assert out.done_ids == set() and out.state == {}
+
+
+def test_raw_blob_ids():
+    z = "0" * 40
+    raw = (
+        f":100644 100644 {'a' * 40} {'b' * 40} M\tsrc/x.c\n"
+        f":000000 100644 {z} {'c' * 40} A\tsrc/new.c\n"
+        f":160000 160000 {'d' * 40} {'e' * 40} M\tdeps/sub\n"
+        "\n"
+    )
+    assert gf.raw_blob_ids(raw) == {"a" * 40, "b" * 40, "c" * 40}
 
 
 def _commit(sha, name, email, pr=None):
