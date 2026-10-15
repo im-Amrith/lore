@@ -170,16 +170,23 @@ class GitHub:
         time.sleep(wait)
 
     def graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Run a query. Retries 5xx (raising TransientError after 3 tries) and waits out rate limits."""
+        """Run a query. Retries 5xx (raising TransientError after 3 tries) and waits out rate limits.
+
+        Network errors (DNS, dropped connections) get a longer backoff, ~5 min in
+        total, so a brief outage doesn't throw away a long PR fetch.
+        """
         transient = 0
+        network = 0
         while True:
             try:
                 r = self.http.post(GRAPHQL_URL, json={"query": query, "variables": variables or {}})
             except httpx.TransportError as e:
-                transient += 1
-                if transient >= 3:
+                network += 1
+                if network >= 8:
                     raise TransientError(str(e)) from e
-                time.sleep(5 * transient)
+                wait = min(60, 5 * 2 ** (network - 1))
+                self.log(f"  network error ({e}); retry {network}/7 in {wait}s")
+                time.sleep(wait)
                 continue
             self.calls += 1
 
