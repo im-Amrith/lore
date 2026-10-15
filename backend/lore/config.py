@@ -16,6 +16,16 @@ SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 # Separate graph for the healthcheck so test nodes never land in an org graph.
 HEALTHCHECK_GRAPH = "lore_healthcheck"
 
+# Default fetch window.
+FETCH_SINCE_DAYS = 548  # ~18 months
+
+# Branches to read commits from in addition to the default branch, per repo.
+# FalkorDB/FalkorDB: the Rust engine replaced main's tree in one commit (PR #2279);
+# its real history (~2,900 commits) lives only on main-rs.
+EXTRA_BRANCHES: dict[str, list[str]] = {
+    "FalkorDB/FalkorDB": ["main-rs"],
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

@@ -83,7 +83,8 @@ docker compose up -d falkordb                 # FalkorDB on 6379, browser on htt
 cd backend; uv sync; cd ..                    # backend deps
 uv run --directory backend python scripts/healthcheck.py
 uv run --directory backend pytest             # unit tests
-# add: fetch, load, derive, ask, eval, serve commands as they are created
+uv run --directory backend python scripts/fetch.py --repo FalkorDB/FalkorDB   # GitHub -> data/raw (cached; --refresh, --since, --org, --summary)
+# add: load, derive, ask, eval, serve commands as they are created
 ```
 
 ## Conventions
