@@ -124,3 +124,19 @@ def test_commit_pr_links_rebase_merge_by_subject_and_date():
     ]
     pr_commits = {14: [("old1", "analytics: count clicks", 100), ("old2", "analytics: add reset()", 200)]}
     assert commit_pr_links(commits, {"new2": 14}, pr_commits) == {"new1": 14, "new2": 14}
+
+
+def test_commit_pr_links_number_needs_matching_base_branch():
+    # main-rs came from another repo: its "Merge pull request #658" is not this repo's PR #658.
+    commits = [
+        {"sha": "rs1", "parents": [], "pr_number": 658, "branches": ["main-rs"], "subject": "x", "authored_at": 1},
+        {"sha": "rs2", "parents": [], "pr_number": 2262, "branches": ["main-rs"], "subject": "y", "authored_at": 2},
+        {"sha": "m1", "parents": [], "pr_number": 2678, "branches": ["main"], "subject": "z", "authored_at": 3},
+    ]
+    base = {658: "master", 2262: "main-rs", 2678: "main"}
+    assert commit_pr_links(commits, {}, None, base) == {"rs2": 2262, "m1": 2678}
+
+
+def test_exact_link_beats_number():
+    commits = [{"sha": "a", "parents": [], "pr_number": 5, "branches": ["main"], "subject": "s", "authored_at": 1}]
+    assert commit_pr_links(commits, {"a": 9}, None, {5: "main", 9: "main"}) == {"a": 9}

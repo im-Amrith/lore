@@ -21,6 +21,7 @@ STEPS: list[tuple[str, str]] = [
     ("issues", "load_issues"),
     ("commits", "load_commits"),
     ("touches", "load_touches"),
+    ("commits", "load_part_of_reset"),
     ("part_of", "load_part_of"),
     ("reviews", "load_reviews"),
     ("closes", "load_closes"),

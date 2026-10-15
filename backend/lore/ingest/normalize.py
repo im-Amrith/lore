@@ -82,26 +82,28 @@ def commit_pr_links(
     commits: list[dict],
     merge_commit_pr: dict[str, int],
     pr_commits: dict[int, list[tuple[str, str, int]]] | None = None,
+    pr_base: dict[int, str] | None = None,
 ) -> dict[str, int]:
     """sha -> PR number for every commit we can tie to a PR.
 
-    1. the subject names the PR: squash merges "Title (#12)", merge commits
-       "Merge pull request #12 from ...";
-    2. the PR's mergeCommit oid;
-    3. the PR's own commits (pr_commits: number -> [(oid, subject, authored_at)]):
+    Exact links first:
+    1. the PR's mergeCommit oid;
+    2. the PR's own commits (pr_commits: number -> [(oid, subject, authored_at)]):
        by sha, or for rebase merges (new shas) by subject + author date, which a
-       rebase keeps;
+       rebase keeps.
+    Then by number:
+    3. the subject names the PR: squash merges "Title (#12)", merge commits
+       "Merge pull request #12 from ...". With pr_base (number -> base branch),
+       only if the PR's base branch is one of the commit's branches: FalkorDB's
+       main-rs history came from another repo, whose "#658" is a different PR;
     4. for a merge commit, every commit on its branch side: ancestors of the second
        parent, stopping at the first-parent mainline (what `git log M^1..M^2` shows).
     """
     by_sha = {c["sha"]: c for c in commits}
     links: dict[str, int] = {}
-    for c in commits:
-        if c["pr_number"]:
-            links[c["sha"]] = c["pr_number"]
     for sha, n in merge_commit_pr.items():
         if sha in by_sha:
-            links.setdefault(sha, n)
+            links[sha] = n
     if pr_commits:
         by_subject = {(c["subject"], c["authored_at"]): c["sha"] for c in commits}
         for n, pcs in pr_commits.items():
@@ -109,6 +111,10 @@ def commit_pr_links(
                 sha = oid if oid in by_sha else by_subject.get((subject, authored_at))
                 if sha:
                     links.setdefault(sha, n)
+    for c in commits:
+        n = c["pr_number"]
+        if n and (pr_base is None or pr_base.get(n) in c.get("branches", [])):
+            links.setdefault(c["sha"], n)
 
     # First-parent chains from every head (a commit nobody in the set lists as a parent).
     parents_seen = {p for c in commits for p in c["parents"]}
@@ -230,7 +236,7 @@ class _People:
         pid = person_id(login)
         row = self.rows.setdefault(pid, {"id": pid, "login": login, "name": login,
                                          "is_bot": False, "first_seen": None, "last_active": None})
-        row["is_bot"] = row["is_bot"] or bot or is_bot_name(login)
+        row["is_bot"] = row["is_bot"] or bot or is_bot_name(login) or bool(name and is_bot_name(name))
         if name:
             self.names[pid][name] += 1
         self._seen(row, at)
@@ -337,7 +343,8 @@ def normalize_repos(repos: list[tuple[str, str]], raw_dir: Path = RAW_DIR) -> Ro
         pr_commits = {pr["number"]: [(pc["commit"]["oid"], pc["commit"]["messageHeadline"],
                                       epoch(pc["commit"]["authoredDate"])) for pc in pr.get("commits", [])]
                       for pr in data["prs"] or []}
-        links = commit_pr_links(commits, merge_commit_pr, pr_commits)
+        pr_base = {pr["number"]: pr["baseRefName"] for pr in data["prs"] or []}
+        links = commit_pr_links(commits, merge_commit_pr, pr_commits, pr_base)
         for c in commits:
             at = c["committed_at"]
             author = (people.login(c["author_login"], at, name=c["author_name"]) if c["author_login"]
@@ -359,7 +366,7 @@ def normalize_repos(repos: list[tuple[str, str]], raw_dir: Path = RAW_DIR) -> Ro
             for mid, (add, dele, n) in per_module.items():
                 rows.touches.append({"commit_id": commit_id(c["sha"]), "module_id": mid,
                                      "additions": add, "deletions": dele, "files": n, "at": at})
-            if c["sha"] in links and (repo, links[c["sha"]]) in idx.numbers:
+            if c["sha"] in links and links[c["sha"]] in pr_base:
                 rows.part_of.append({"commit_id": commit_id(c["sha"]), "pr_id": pr_id(repo, links[c["sha"]]), "at": at})
 
         # Pull requests, reviews, comments
