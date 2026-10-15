@@ -145,6 +145,30 @@ def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+class Checkpoint:
+    """Partial progress of one long step, kept in <output>.partial.json until the step finishes.
+
+    `key` identifies the run's parameters (the since date); a checkpoint saved
+    with a different key is ignored, so changing --since never mixes windows.
+    """
+
+    def __init__(self, path: Path, key: str):
+        self.path, self.key = path, key
+        self.state: dict[str, Any] = {}
+        if path.exists():
+            saved = read_json(path)
+            if saved.get("key") == key:
+                self.state = saved
+
+    def save(self, **fields: Any) -> None:
+        self.state.update(fields, key=self.key)
+        write_json(self.path, self.state)
+
+    def clear(self) -> None:
+        self.state = {}
+        self.path.unlink(missing_ok=True)
+
+
 # ---------------------------------------------------------------------------
 # GraphQL client with rate-limit handling
 # ---------------------------------------------------------------------------
@@ -154,7 +178,7 @@ class TransientError(Exception):
 
 
 class GitHub:
-    def __init__(self, token: str, log: Callable[[str], None] = print):
+    def __init__(self, token: str, log: Callable[[str], None] = lambda m: print(m, flush=True)):
         if not token:
             raise SystemExit("GITHUB_TOKEN is not set (see .env.example)")
         self.http = httpx.Client(
@@ -229,14 +253,28 @@ class GitHub:
         stop: Callable[[dict], bool] | None = None,
         page_size: int = 50,
         label: str = "",
+        checkpoint: Checkpoint | None = None,
     ) -> list[dict[str, Any]]:
         """Follow a connection at `path` (e.g. ["repository", "pullRequests"]).
 
         `stop(node)` ends paging at the first node it returns True for (that node is
         excluded). Page size halves when GitHub keeps timing out on a heavy page.
+        With a checkpoint, nodes and the cursor are saved after every page and a
+        rerun resumes from them.
         """
-        nodes: list[dict] = []
-        after = None
+        state = checkpoint.state if checkpoint else {}
+        nodes: list[dict] = state.get("nodes", [])
+        after = state.get("after")
+        if state.get("listed"):
+            return nodes
+        if nodes:
+            self.log(f"  {label}: resuming after {len(nodes)}")
+
+        def done() -> list[dict]:
+            if checkpoint:
+                checkpoint.save(nodes=nodes, after=after, listed=True)
+            return nodes
+
         while True:
             try:
                 data = self.graphql(query, {**variables, "first": page_size, "after": after})
@@ -251,13 +289,15 @@ class GitHub:
                 conn = conn[key]
             for node in conn["nodes"]:
                 if stop and stop(node):
-                    return nodes
+                    return done()
                 nodes.append(node)
             if label:
                 self.log(f"  {label}: {len(nodes)}")
             if not conn["pageInfo"]["hasNextPage"]:
-                return nodes
+                return done()
             after = conn["pageInfo"]["endCursor"]
+            if checkpoint:
+                checkpoint.save(nodes=nodes, after=after, listed=False)
 
 
 # ---------------------------------------------------------------------------
@@ -405,25 +445,37 @@ def list_org_repos(gh: GitHub, org: str, since: datetime) -> list[str]:
     ]
 
 
-def fetch_prs(gh: GitHub, owner: str, name: str, since: datetime) -> list[dict]:
+def _complete_all(gh: GitHub, typename: str, nodes: list[dict], nested: dict, cp: Checkpoint | None, label: str) -> list[dict]:
+    """_complete_nested on every node, marking finished ones with _done and saving every 25."""
+    todo = [n for n in nodes if not n.get("_done")]
+    if cp and len(todo) < len(nodes):
+        gh.log(f"  {label}: {len(nodes) - len(todo)} already complete, {len(todo)} to go")
+    for i, node in enumerate(todo, 1):
+        _complete_nested(gh, typename, node, nested)
+        node["_done"] = True
+        if cp and i % 25 == 0:
+            cp.save(nodes=nodes)
+            gh.log(f"  {label} completed: {len(nodes) - len(todo) + i}/{len(nodes)}")
+    for node in nodes:
+        node.pop("_done", None)
+    return nodes
+
+
+def fetch_prs(gh: GitHub, owner: str, name: str, since: datetime, cp: Checkpoint | None = None) -> list[dict]:
     cutoff = since.timestamp()
     prs = gh.paginate(
         PRS_QUERY, {"owner": owner, "name": name}, ["repository", "pullRequests"],
-        stop=lambda n: iso_to_epoch(n["updatedAt"]) < cutoff, page_size=20, label="PRs",
+        stop=lambda n: iso_to_epoch(n["updatedAt"]) < cutoff, page_size=20, label="PRs", checkpoint=cp,
     )
-    for pr in prs:
-        _complete_nested(gh, "PullRequest", pr, PR_NESTED)
-    return prs
+    return _complete_all(gh, "PullRequest", prs, PR_NESTED, cp, "PRs")
 
 
-def fetch_issues(gh: GitHub, owner: str, name: str, since: datetime) -> list[dict]:
+def fetch_issues(gh: GitHub, owner: str, name: str, since: datetime, cp: Checkpoint | None = None) -> list[dict]:
     issues = gh.paginate(
         ISSUES_QUERY, {"owner": owner, "name": name, "since": since.isoformat()},
-        ["repository", "issues"], page_size=50, label="issues",
+        ["repository", "issues"], page_size=50, label="issues", checkpoint=cp,
     )
-    for issue in issues:
-        _complete_nested(gh, "Issue", issue, ISSUE_NESTED)
-    return issues
+    return _complete_all(gh, "Issue", issues, ISSUE_NESTED, cp, "issues")
 
 
 def fetch_releases(gh: GitHub, owner: str, name: str) -> list[dict]:
@@ -599,21 +651,30 @@ def fetch_repo(gh: GitHub, owner: str, name: str, since: datetime, refresh: bool
     log = gh.log
     log(f"== {owner}/{name} (since {since.date()})")
 
-    def step(filename: str, fn: Callable[[], Any]) -> Any:
+    def step(filename: str, fn: Callable[[], Any], cp: Checkpoint | None = None) -> Any:
+        """Run fn unless its output is cached. A step given a checkpoint resumes a failed run."""
         path = d / filename
         if path.exists() and not refresh:
             log(f"  {filename}: cached")
             return read_json(path)
+        if cp and refresh:
+            cp.clear()
         result = fn()
         write_json(path, result)
+        if cp:
+            cp.clear()
         log(f"  {filename}: written")
         return result
+
+    def checkpoint(filename: str) -> Checkpoint:
+        return Checkpoint(d / filename.replace(".json", ".partial.json"), since.isoformat())
 
     meta = step("repo.json", lambda: {**gh.graphql(REPO_QUERY, {"owner": owner, "name": name})["repository"],
                                       "since": since.isoformat(), "fetched_at": int(time.time())})
     default_branch = meta["defaultBranchRef"]["name"]
-    prs = step("prs.json", lambda: fetch_prs(gh, owner, name, since))
-    step("issues.json", lambda: fetch_issues(gh, owner, name, since))
+    prs_cp, issues_cp = checkpoint("prs.json"), checkpoint("issues.json")
+    prs = step("prs.json", lambda: fetch_prs(gh, owner, name, since, prs_cp), prs_cp)
+    step("issues.json", lambda: fetch_issues(gh, owner, name, since, issues_cp), issues_cp)
     step("releases.json", lambda: fetch_releases(gh, owner, name))
     step("codeowners.json", lambda: fetch_codeowners(gh, owner, name))
 
