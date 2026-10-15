@@ -1,0 +1,22 @@
+# Secrets
+.env
+
+# Data (cached GitHub JSON and LLM outputs); snapshots README stays tracked
+data/raw/
+data/cache/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

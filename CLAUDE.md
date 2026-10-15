@@ -82,6 +82,7 @@ PowerShell, from the `lore/` folder:
 docker compose up -d falkordb                 # FalkorDB on 6379, browser on http://localhost:3000
 cd backend; uv sync; cd ..                    # backend deps
 uv run --directory backend python scripts/healthcheck.py
+uv run --directory backend pytest             # unit tests
 # add: fetch, load, derive, ask, eval, serve commands as they are created
 ```
 

@@ -1,0 +1,24 @@
+[project]
+name = "lore"
+version = "0.1.0"
+description = "Lore: a company graph in FalkorDB built from a GitHub org's history"
+requires-python = "==3.11.*"
+dependencies = [
+    "falkordb==1.8.0",
+    "fastapi==0.143.2",
+    "httpx==0.28.1",
+    "pydantic-settings==2.16.0",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
