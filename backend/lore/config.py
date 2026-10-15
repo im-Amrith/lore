@@ -26,6 +26,17 @@ EXTRA_BRANCHES: dict[str, list[str]] = {
     "FalkorDB/FalkorDB": ["main-rs"],
 }
 
+# Module mapping: a file's module is its first MODULE_DEPTH directories, one level
+# deeper under these per-repo prefixes. FalkorDB's engine parts live at graph/src/<x>.
+MODULE_DEPTH = 2
+MODULE_DEEP_PREFIXES: dict[str, list[str]] = {
+    "FalkorDB/FalkorDB": ["graph/src"],
+}
+
+# A commit touching more than this many files replaced a tree (FalkorDB PR #2279);
+# it is loaded with bulk = true and skipped when deriving expertise.
+BULK_COMMIT_FILES = 500
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
