@@ -37,6 +37,12 @@ MODULE_DEEP_PREFIXES: dict[str, list[str]] = {
 # it is loaded with bulk = true and skipped when deriving expertise.
 BULK_COMMIT_FILES = 500
 
+# Bus factor (queries/07_bus_factor.cypher): who counts as someone who could maintain a module.
+# Tuned on the golden set (q09: parser and udf -> 1; s03: sandbox storage -> 1). See the query.
+BUS_FACTOR_MIN_SCORE = 0.9  # decayed authored score: one commit this week (1.0 decays to 0.97 in a week)
+BUS_FACTOR_MIN_SHARE = 0.10  # of the module's total authored score
+BUS_FACTOR_WINDOW = 180 * 86400  # last authored touch within this many seconds
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

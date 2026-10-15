@@ -85,7 +85,8 @@ uv run --directory backend python scripts/healthcheck.py
 uv run --directory backend pytest             # unit tests
 uv run --directory backend python scripts/fetch.py --repo FalkorDB/FalkorDB   # GitHub -> data/raw (cached; --refresh, --since, --org, --summary)
 uv run --directory backend python scripts/load.py --repo im-Amrith/lore-sandbox  # data/raw -> graph lore_<owner>; prints counts
-# add: derive, ask, eval, serve commands as they are created
+uv run --directory backend python scripts/derive.py --org FalkorDB --report  # rebuild EXPERT_IN, print queries 5-7 (--module <id>, --now <date>, --no-derive)
+# add: ask, eval, serve commands as they are created
 ```
 
 ## Conventions

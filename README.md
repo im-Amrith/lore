@@ -25,6 +25,10 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | # | Name | Purpose |
 | --- | --- | --- |
 | 00 | healthcheck | Creates and returns a test node in the `lore_healthcheck` graph |
+| 04 | expert_reset, expert_authored, expert_reviewed, expert_score | Derive `EXPERT_IN`: authored commits with a 180-day half-life, reviews at half weight, combined `score`; skips bots and bulk (> 500 file) commits |
+| 05 | who_knows | F2: top experts on a module, with the PRs and commits behind each score |
+| 06 | paper_owners, team_owners, module_owners | F3: CODEOWNERS owners with no touch in 12 months vs the real experts; team-owned modules; one module's owners ("no listed owner" when none) |
+| 07 | bus_factor | F4: people per module with a real, recent share of authored work (single points of failure first) |
 
 ## Setup
 
@@ -36,6 +40,7 @@ docker compose up -d falkordb                 # FalkorDB on 6379, browser on htt
 cd backend; uv sync; cd ..                    # backend deps (Python 3.11)
 uv run --directory backend python scripts/healthcheck.py
 uv run --directory backend pytest
+uv run --directory backend python scripts/derive.py --org FalkorDB --report   # EXPERT_IN + queries 5-7
 ```
 
 ## Demo
@@ -47,3 +52,4 @@ _TBD._
 This project is built with Claude Code (Anthropic) as a coding assistant. The planning docs in `docs/` were prepared before the event; all code was written during it, with Claude Code generating drafts the team reviewed, ran and committed.
 
 - M0 scaffold (repo layout, Docker Compose, config, FalkorDB client, query loader, healthcheck): written with Claude Code.
+- M4 expertise (queries 04-07, `scripts/derive.py`, bus-factor tuning against the golden set): written with Claude Code.
