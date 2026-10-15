@@ -40,7 +40,7 @@ If a day slips, cut using the cut order in `docs/PLAN.md` (Risks and scope cuts)
 - `lore-mcp`: our MCP tool server, built with the Python MCP SDK
 - Next.js + Tailwind frontend; Cytoscape.js for the evidence path and maps
 - FalkorDB in Docker locally (`falkordb/falkordb:latest`); FalkorDB Cloud for the deployed demo
-- LLM: provider and models come from env vars (`LLM_PROVIDER`, `LLM_MODEL_FAST`, `LLM_MODEL_SMART`); keep one thin wrapper so the provider can be swapped
+- LLM: two OpenAI-compatible endpoints, one per role, called through the `openai` package with `base_url`: fast (Gemini: `LLM_FAST_BASE_URL`, `LLM_FAST_API_KEY`, `LLM_FAST_MODEL`) for extraction, smart (Groq: `LLM_SMART_BASE_URL`, `LLM_SMART_API_KEY`, `LLM_SMART_MODEL`) for the agents; keep one thin wrapper so endpoints can be swapped
 - Embeddings: local `fastembed` with `BAAI/bge-small-en-v1.5` (384 dimensions). Free, no API key, works on Windows. `EMBEDDING_DIM=384`
 - Pin exact versions in `pyproject.toml` and `package.json`
 

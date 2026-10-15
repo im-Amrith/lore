@@ -1,5 +1,7 @@
 # Secrets
 .env
+.env.*
+!.env.example
 
 # Data (cached GitHub JSON and LLM outputs); snapshots README stays tracked
 data/raw/
@@ -20,3 +22,5 @@ node_modules/
 .idea/
 .DS_Store
 Thumbs.db
+.env*
+!.env.example

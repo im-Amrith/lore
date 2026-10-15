@@ -30,10 +30,13 @@ class Settings(BaseSettings):
     falkordb_port: int = 6379
     falkordb_password: str = ""
 
-    llm_provider: str = ""
-    llm_api_key: str = ""
-    llm_model_fast: str = ""
-    llm_model_smart: str = ""
+    # Two OpenAI-compatible endpoints, one per role.
+    llm_fast_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    llm_fast_api_key: str = ""
+    llm_fast_model: str = ""
+    llm_smart_base_url: str = "https://api.groq.com/openai/v1"
+    llm_smart_api_key: str = ""
+    llm_smart_model: str = ""
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dim: int = 384
     llm_daily_call_cap: int = 2000
