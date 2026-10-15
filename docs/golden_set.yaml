@@ -1,0 +1,232 @@
+# Lore golden set: 10 hand-checked questions used as the eval (scripts/eval.py, Day 2 gate: 7 of 10).
+#
+# STATUS: candidates drafted on Oct 10, 2026 from the FalkorDB/FalkorDB repo (main + main-rs branches).
+# Each needs a human check: open every must_cite link, confirm `expected` matches what the page says,
+# fix anything that's off, then set checked_on. Remove `verify:` lines once done.
+#
+# Data caveats found while building this set (they also affect Lore's design; see PROMPTS.md M2-M4):
+#   1. The Rust engine became `main` on Aug 2, 2026 via ONE commit (PR #2279) that replaced the whole tree.
+#      Its 2,917-commit history lives only on the `main-rs` branch. Fetching only the default branch makes
+#      Dvir Dukhan (who authored #2279) look like the expert on every file. Lore must also load `main-rs`
+#      history and skip tree-replacing commits (e.g. > 500 files) when deriving EXPERT_IN.
+#   2. Commit author names (Avi Avni) differ from GitHub logins (AviAvni). Use the API's author.login.
+#   3. Only 3-4 humans are active, so most engine modules have low bus factor. That is a real finding,
+#      not a bug, and a good line for the demo.
+#   4. CODEOWNERS only lists /build/, /.github/ and /CODEOWNERS, all owned by the team @FalkorDB/falkordb-core.
+#      Team membership may not be public, so "owns" answers will say "the falkordb-core team" + the active experts.
+#
+# Expertise numbers below: human commits since Apr 2025 across main-rs + main (excluding #2279 and bots),
+# time-decayed with a 180-day half-life, as of Oct 10, 2026. Re-check on Oct 15 if you like; they move slowly.
+
+questions:
+  - id: q01
+    type: why
+    question: "Why did the Rust engine drop all_nodes_matrix?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      Writes after a large deletion were slow because every create and delete had to maintain all_nodes_matrix,
+      a GraphBLAS matrix of every live node, and nothing read it any more (the scan already walked ids minus the
+      deleted set, like the C engine). Removing it made node creation flat after mass deletes, level with C,
+      and cut memory for 1M bare nodes from 10.1 MB to 0.1 MB.
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/pull/2678
+    key_facts: ["all_nodes_matrix", "deletion", "nothing reads it", "Avi Avni"]
+    expected_path: "Decision -> DECIDED_IN -> PR #2678 (AviAvni) -> TOUCHES graph/src/graph"
+    checked_on: ""
+    notes: "Merged Sep 1, 2026. Rich benchmark tables in the PR body; good demo question."
+    verify: "Open the PR, confirm the author and the 10.1 MB -> 0.1 MB figure."
+
+  - id: q02
+    type: why
+    question: "Why does the engine now fold MVCC deltas on every write?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      Outside GRAPH.BULK, deltas were never folded into the base matrix, so a long-lived graph grew its delta
+      layers without limit and every read paid a cost proportional to the delta size. PR #2349 added an adaptive
+      fold policy driven by a measured cost model on every mutation path. An LSM-style ratio rule was rejected
+      because it ignores transaction size.
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/pull/2349
+    key_facts: ["GRAPH.BULK", "delta", "fold", "cost model"]
+    expected_path: "Decision -> DECIDED_IN -> PR #2349 (AviAvni, reviewed by DvirDukhan) -> AFFECTS graph/src/graph"
+    checked_on: ""
+    notes: "Merged Aug 10, 2026. Ported from falkordb-rs-next-gen#767. The rejected alternative is in the PR page, not the commit message."
+    verify: "Confirm the 'LSM-style ratio rule rejected' line is in the PR description."
+
+  - id: q03
+    type: why
+    question: "Why are there two branches, main and master?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      On Aug 2, 2026 (PR #2279, tracking issue #2280) main became the development line for the Rust engine,
+      versions 6.0 and later, while the C engine stays on master for 5.x maintenance and releases with its own CI.
+      The Rust history is kept on the main-rs branch, which must be preserved because it is the only ref
+      reaching those commits.
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/pull/2279
+      - https://github.com/FalkorDB/FalkorDB/issues/2280
+    key_facts: ["Rust", "6.0", "master", "C engine", "main-rs"]
+    expected_path: "Decision -> DECIDED_IN -> PR #2279 (DvirDukhan) -> linked Issue #2280"
+    checked_on: ""
+    notes: "Neither page says WHY Rust (only the mechanics). If someone asks 'why Rust?', the correct Lore answer is 'not found in the sources' plus these links. Good test of the not-found behaviour."
+    verify: "Confirm the 5.x / 6.0 split wording in #2280."
+
+  - id: q04
+    type: why
+    question: "Why were graphblas.sh and redisearch.sh replaced with a native-deps crate?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      GraphBLAS and LAGraph weren't tracked by git: the script cloned them at build time from a version string,
+      so no build was tied to a reviewable commit. PR #2695 made them submodules and added a native-deps crate
+      with a content-addressed artifact cache keyed on everything the artifacts are ABI-tied to, so a compiler
+      bump can't reuse stale archives. The Dockerfile was split into stages so a small change no longer
+      invalidates a ~12 minute GraphBLAS build.
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/pull/2695
+    key_facts: ["submodule", "cache", "GraphBLAS", "12 minute"]
+    expected_path: "Decision -> DECIDED_IN -> PR #2695 (DvirDukhan) -> AFFECTS build, native-deps"
+    checked_on: ""
+    notes: "Merged Oct 5, 2026."
+    verify: "Open the PR and skim the first paragraph."
+
+  - id: q05
+    type: who
+    question: "Who should I ask about indexes in the Rust engine?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      Dvir Dukhan (DvirDukhan) is the top expert on graph/src/index (decayed score ~40; he built the native
+      numeric index and the CoW B-tree), with Avi Avni (AviAvni) close behind (~27; recent range and vector
+      index fixes).
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/pull/2350
+      - https://github.com/FalkorDB/FalkorDB/pull/2278
+    key_facts: ["DvirDukhan", "AviAvni", "graph/src/index"]
+    expected_path: "Person -> EXPERT_IN -> Module graph/src/index (evidence: AUTHORED PRs touching it)"
+    checked_on: ""
+    notes: "This only comes out right if main-rs history is loaded and #2279 is skipped (caveat 1)."
+    verify: "GitHub > graph/src/index > History: mostly Dvir and Avi?"
+
+  - id: q06
+    type: who
+    question: "Who knows the Cypher parser?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      Avi Avni (AviAvni), by a wide margin: about 95% of human commits to graph/src/parser since Apr 2025,
+      including recent lexer and syntax fixes.
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/pull/2910
+      - https://github.com/FalkorDB/FalkorDB/pull/3060
+    key_facts: ["AviAvni", "graph/src/parser"]
+    expected_path: "Person -> EXPERT_IN -> Module graph/src/parser"
+    checked_on: ""
+    notes: "One Copilot-authored commit (#2533) touches the parser; bots should be excluded from expertise."
+    verify: "GitHub > graph/src/parser > History."
+
+  - id: q07
+    type: owns
+    question: "Who owns the build folder, and who actually works on it?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      CODEOWNERS assigns /build/ to the @FalkorDB/falkordb-core team. The most active people there are
+      Dvir Dukhan (score ~33; e.g. the native-deps crate, running redis-server as a non-root user) and
+      Avi Avni (~19).
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/blob/main/CODEOWNERS
+      - https://github.com/FalkorDB/FalkorDB/pull/2695
+    key_facts: ["falkordb-core", "DvirDukhan", "build"]
+    expected_path: "Team -> OWNS -> Module build, compared with Person -> EXPERT_IN -> build"
+    checked_on: ""
+    notes: "The CODEOWNERS file explains its own purpose: these paths execute with the repo's credentials. Nice extra fact for the answer."
+    verify: "Open the CODEOWNERS link."
+
+  - id: q08
+    type: owns
+    question: "Who owns the query planner?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      No owner is listed for graph/src/planner in CODEOWNERS. In practice Avi Avni (AviAvni) does most of
+      the work (score ~49), followed by Dvir Dukhan (~11).
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/blob/main/CODEOWNERS
+    key_facts: ["no owner listed", "AviAvni", "graph/src/planner"]
+    expected_path: "No OWNS edge -> fall back to EXPERT_IN"
+    checked_on: ""
+    notes: "Tests that Lore says 'no listed owner' instead of inventing one."
+    verify: "Pick a recent planner PR (e.g. #2390 is by Dvir) and add it to must_cite."
+
+  - id: q09
+    type: risk
+    question: "Which parts of the engine depend on a single person?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      graph/src/parser (~95% Avi Avni), graph/src/udf (100% Avi Avni) and fuzz/ (~97% Avi Avni) each have one
+      active expert. Most other engine modules have only two (Avi Avni and Dvir Dukhan).
+    must_cite:
+      - https://github.com/FalkorDB/FalkorDB/tree/main/graph/src/parser
+      - https://github.com/FalkorDB/FalkorDB/tree/main/graph/src/udf
+    key_facts: ["parser", "udf", "AviAvni", "bus factor 1"]
+    expected_path: "Module with exactly one EXPERT_IN above threshold"
+    checked_on: ""
+    notes: "Exact list depends on the score threshold in query 7. Accept any answer that names parser and udf."
+    verify: "Check the History of both folders."
+
+  - id: q10
+    type: impact
+    question: "If we change the parser, what else usually has to change?"
+    org: FalkorDB
+    repo: FalkorDB
+    expected: >
+      The planner and the runtime. About half of parser-touching commits also touch graph/src/planner (50%)
+      and graph/src/runtime (47%).
+    must_cite: []
+    key_facts: ["planner", "runtime"]
+    expected_path: "Module graph/src/parser -> CO_CHANGED -> graph/src/planner, graph/src/runtime"
+    checked_on: ""
+    notes: "Co-change counted on commits touching <= 6 engine modules. No single URL proves this; check the answer's numbers against Lore's own CO_CHANGED edges."
+    verify: "Optional: open 3 recent parser PRs and see if they touch planner or runtime."
+
+# Spare "why" candidates if any of q01-q04 don't check out:
+spares:
+  - question: "Why does PR CI now use a merge queue?"
+    must_cite: ["https://github.com/FalkorDB/FalkorDB/pull/2718"]
+    expected: >
+      Fork PRs get a read-only token, so image-dependent jobs failed. Image-free tests moved to pull_request,
+      and a merge queue gates main by testing the exact commit that will land, without the riskier
+      pull_request_target. Post-merge reruns were dropped (248 of 505 runner-minutes were duplicate work).
+  - question: "Which engine does Docker :latest point to now?"
+    must_cite: ["https://github.com/FalkorDB/FalkorDB/pull/2882", "https://github.com/FalkorDB/FalkorDB/issues/2881"]
+    expected: "Since PR #2882 (Sep 24, 2026), :latest on Docker Hub carries the Rust image on release; the :latest-rs tag was dropped."
+  - question: "Why was Bolt support removed?"
+    must_cite: ["https://github.com/FalkorDB/FalkorDB/pull/2170", "https://github.com/FalkorDB/FalkorDB/issues/2169"]
+    expected: "Removed in PR #2170 (Jul 2026). Neither page gives a reason, so the right answer is 'no reason recorded' plus the links. Use as a second not-found test."
+
+# Sandbox checks (lore-sandbox). See docs/SANDBOX_STORY.md.
+sandbox:
+  - id: s01
+    type: why
+    question: "Why do we cache links in Redis?"
+    expected_before_reversal: >
+      PR 1 moved the link cache to a shared Redis instance (24h TTL) because each of 3 replicas had its own
+      cache that went cold on every deploy and served stale links after edits. In-process LRU + pub/sub was
+      rejected as more moving parts across 2 regions. Cites PR 1, issue #1, ADR 0001.
+    expected_after_reversal: >
+      That decision was superseded by PR 6: the Redis hop raised p99 from 4 ms to 12 ms (#6) and the service
+      now runs 2 replicas in one region, so it went back to an in-process LRU with pub/sub invalidation.
+      Cites PR 6, #6, ADR 0003, and shows PR 1 as history.
+  - id: s02
+    type: owns
+    question: "Who owns analytics?"
+    expected: "CODEOWNERS lists <reviewer-login>, but all analytics commits are by Priya Raman. Ask Priya."
+  - id: s03
+    type: risk
+    question: "Which modules depend on one person?"
+    expected: "storage/: every commit is by Marta Silva (the listed owner, <your-login>, has never touched it)."
