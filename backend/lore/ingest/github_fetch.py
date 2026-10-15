@@ -324,6 +324,9 @@ PR_NESTED = {
     "reviews": (50, REVIEW_FIELDS),
     "comments": (50, COMMENT_FIELDS),
     "closingIssuesReferences": (20, CLOSING_FIELDS),
+    # The PR's own commits: rebase merges rewrite shas, so the loader matches
+    # commits on main to these by subject + author date.
+    "commits": (100, "commit { oid messageHeadline authoredDate }"),
 }
 ISSUE_NESTED = {"comments": (100, COMMENT_FIELDS)}
 
