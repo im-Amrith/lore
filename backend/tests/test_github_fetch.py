@@ -111,3 +111,34 @@ def test_complete_all_skips_done_nodes(tmp_path, monkeypatch):
     nodes = [{"number": 1, "_done": True}, {"number": 2}]
     out = gf._complete_all(FakeGitHub([]), "PullRequest", nodes, {}, None, "PRs")
     assert seen == [2] and all("_done" not in n for n in out)
+
+
+def _commit(sha, name, email, pr=None):
+    return {"sha": sha, "author_name": name, "author_email": email, "pr_number": pr}
+
+
+def test_assign_logins_sandbox_cast():
+    commits = [
+        _commit("a", "Amrithesh S Menon", "me@home.example"),
+        _commit("b", "im-Amrith", "1+im-Amrith@users.noreply.github.com"),
+        _commit("c", "Amrithesh S Menon", "me@old-laptop.example"),  # unlinked email
+        _commit("d", "Priya Raman", "priya@tern.invalid", pr=12),     # inside a PR im-Amrith opened
+        _commit("e", "Marta Silva", "marta@tern.invalid"),
+    ]
+    counts = gf.assign_logins(commits, {"a": "im-Amrith", "b": "im-Amrith", "c": None, "d": None, "e": None})
+    logins = {c["sha"]: (c["author_login"], c["login_source"]) for c in commits}
+    assert logins == {
+        "a": ("im-Amrith", "api"),
+        "b": ("im-Amrith", "api"),
+        "c": ("im-Amrith", "name_match"),
+        "d": (None, "name_only"),
+        "e": (None, "name_only"),
+    }
+    assert counts == {"api": 2, "noreply": 0, "name_match": 1, "name_only": 2}
+    assert all("author_email" not in c for c in commits)
+
+
+def test_assign_logins_ambiguous_name_stays_unlinked():
+    commits = [_commit("a", "Sam", "x@a.example"), _commit("b", "Sam", "y@b.example"), _commit("c", "Sam", "z@c.example")]
+    gf.assign_logins(commits, {"a": "sam-one", "b": "sam-two", "c": None})
+    assert commits[2]["author_login"] is None

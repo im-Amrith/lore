@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -585,59 +586,59 @@ def read_commits(git_dir: Path, branches: Iterable[str], since: datetime) -> lis
     return sorted(by_sha.values(), key=lambda c: c["committed_at"], reverse=True)
 
 
-def map_logins(gh: GitHub, owner: str, name: str, commits: list[dict], prs: list[dict]) -> dict[str, int]:
-    """Set author_login on every commit and drop author_email. Returns counts by mapping source.
-
-    1. noreply emails encode the login directly;
-    2. otherwise ask GitHub which user one commit per distinct email belongs to
-       (the same email always maps to the same account);
-    3. if GitHub has no linked account, fall back to the author of the PR the
-       commit names in its subject ("(#1234)"); squash merges carry the PR author.
-    """
-    sample: dict[str, str] = {}
-    for c in commits:
-        sample.setdefault(c["author_email"].lower(), c["sha"])
-
-    email_login: dict[str, str | None] = {}
-    to_ask = []
-    for email, sha in sample.items():
-        login = login_from_noreply(email)
-        if login:
-            email_login[email] = login
-        else:
-            to_ask.append((email, sha))
-
-    for start in range(0, len(to_ask), 50):
-        batch = to_ask[start:start + 50]
+def lookup_commit_logins(gh: GitHub, owner: str, name: str, shas: list[str]) -> dict[str, str | None]:
+    """Ask GitHub for author.user.login of every commit (50 per query). None = no linked account."""
+    out: dict[str, str | None] = {}
+    for start in range(0, len(shas), 50):
+        batch = shas[start:start + 50]
         decls = ", ".join(f"$c{i}: GitObjectID!" for i in range(len(batch)))
         objs = " ".join(f"c{i}: object(oid: $c{i}) {{ ... on Commit {{ author {{ user {{ login }} }} }} }}" for i in range(len(batch)))
         q = f"query($owner: String!, $name: String!, {decls}) {{ {RATE} repository(owner: $owner, name: $name) {{ {objs} }} }}"
         variables: dict[str, Any] = {"owner": owner, "name": name}
-        variables.update({f"c{i}": sha for i, (_, sha) in enumerate(batch)})
+        variables.update({f"c{i}": sha for i, sha in enumerate(batch)})
         repo = gh.graphql(q, variables)["repository"]
-        for i, (email, _) in enumerate(batch):
-            obj = repo.get(f"c{i}") or {}
-            user = (obj.get("author") or {}).get("user")
-            email_login[email] = user["login"] if user else None
+        for i, sha in enumerate(batch):
+            user = ((repo.get(f"c{i}") or {}).get("author") or {}).get("user")
+            out[sha] = user["login"] if user else None
+        if len(shas) > 50:
+            gh.log(f"  commit logins: {len(out)}/{len(shas)}")
+    return out
 
-    pr_author = {pr["number"]: (pr.get("author") or {}).get("login") for pr in prs}
-    pr_merger = {pr["number"]: (pr.get("mergedBy") or {}).get("login") for pr in prs}
-    counts = {"noreply": 0, "api": 0, "pr_author": 0, "pr_merger": 0, "name_only": 0}
+
+def assign_logins(commits: list[dict], api_login: dict[str, str | None]) -> dict[str, int]:
+    """Set author_login + login_source on every commit and drop author_email. Returns counts per source.
+
+    1. api: GitHub's author.user.login for that commit (authoritative);
+    2. noreply: the login encoded in a users.noreply.github.com email (e.g. deleted
+       accounts the API no longer links);
+    3. name_match: the author name appears on api-resolved commits with exactly one
+       login (same person, unlinked work email);
+    4. name_only: no login; the loader makes person:name:<slug> from author_name.
+
+    The PR author is deliberately not used: commit-only authors (the sandbox's
+    Priya and Marta) commit inside PRs someone else opened.
+    """
     for c in commits:
-        email = c.pop("author_email").lower()
-        login = email_login.get(email)
-        # A "Merge pull request #N" commit is authored by whoever clicked merge.
-        by_merger = bool(MERGE_PR_RE.match(c["subject"]))
-        pr_login = (pr_merger if by_merger else pr_author).get(c["pr_number"])
+        email = c.pop("author_email")
+        login = api_login.get(c["sha"])
         if login:
-            c["author_login"] = login
-            c["login_source"] = "noreply" if login_from_noreply(email) else "api"
-        elif pr_login:
-            c["author_login"] = pr_login
-            c["login_source"] = "pr_merger" if by_merger else "pr_author"
+            c["author_login"], c["login_source"] = login, "api"
+        elif noreply := login_from_noreply(email):
+            c["author_login"], c["login_source"] = noreply, "noreply"
         else:
-            c["author_login"] = None  # commit-only author: keep author_name
-            c["login_source"] = "name_only"
+            c["author_login"], c["login_source"] = None, "name_only"
+
+    name_logins: dict[str, set[str]] = {}
+    for c in commits:
+        if c["author_login"]:
+            name_logins.setdefault(c["author_name"], set()).add(c["author_login"])
+    for c in commits:
+        logins = name_logins.get(c["author_name"], set())
+        if not c["author_login"] and len(logins) == 1:
+            c["author_login"], c["login_source"] = next(iter(logins)), "name_match"
+
+    counts = {"api": 0, "noreply": 0, "name_match": 0, "name_only": 0}
+    for c in commits:
         counts[c["login_source"]] += 1
     return counts
 
@@ -673,7 +674,7 @@ def fetch_repo(gh: GitHub, owner: str, name: str, since: datetime, refresh: bool
                                       "since": since.isoformat(), "fetched_at": int(time.time())})
     default_branch = meta["defaultBranchRef"]["name"]
     prs_cp, issues_cp = checkpoint("prs.json"), checkpoint("issues.json")
-    prs = step("prs.json", lambda: fetch_prs(gh, owner, name, since, prs_cp), prs_cp)
+    step("prs.json", lambda: fetch_prs(gh, owner, name, since, prs_cp), prs_cp)
     step("issues.json", lambda: fetch_issues(gh, owner, name, since, issues_cp), issues_cp)
     step("releases.json", lambda: fetch_releases(gh, owner, name))
     step("codeowners.json", lambda: fetch_codeowners(gh, owner, name))
@@ -685,7 +686,7 @@ def fetch_repo(gh: GitHub, owner: str, name: str, since: datetime, refresh: bool
 
     def commits() -> dict:
         cs = read_commits(git_dir, branches, since)
-        counts = map_logins(gh, owner, name, cs, prs)
+        counts = assign_logins(cs, lookup_commit_logins(gh, owner, name, [c["sha"] for c in cs]))
         log(f"  commit logins: {counts}")
         return {"branches": branches, "since": since.isoformat(), "login_sources": counts, "commits": cs}
 
@@ -721,8 +722,15 @@ def summarize(owner: str, name: str) -> dict[str, Any]:
             f"{datetime.fromtimestamp(min(dates), timezone.utc).date()} .. {datetime.fromtimestamp(max(dates), timezone.utc).date()}"
             if dates else "-"
         ),
+        "commit_login_sources": commits_doc.get("login_sources"),
+        "commit_authors_top": Counter(
+            c["author_login"] or f"name:{c['author_name']}" for c in commits
+        ).most_common(12),
+        "issue_pr_numbers": len({p["number"] for p in prs} | {i["number"] for i in issues}),
         "prs": len(prs),
         "prs_merged": sum(1 for p in prs if p["mergedAt"]),
+        "prs_open": sum(1 for p in prs if p["state"] == "OPEN"),
+        "prs_draft": sum(1 for p in prs if p["isDraft"]),
         "reviews": reviews,
         "issues": len(issues),
         "comments": pr_comments + review_comments + issue_comments,
