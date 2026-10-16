@@ -1,5 +1,7 @@
 """Settings read from env vars (and the repo-root .env). See .env.example."""
 
+import re
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -12,6 +14,8 @@ DATA_DIR = REPO_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
+LLM_CACHE_DIR = CACHE_DIR / "llm"
+TOPICS_FILE = REPO_ROOT / "docs" / "TOPICS.md"
 
 # Separate graph for the healthcheck so test nodes never land in an org graph.
 HEALTHCHECK_GRAPH = "lore_healthcheck"
@@ -42,6 +46,64 @@ BULK_COMMIT_FILES = 500
 BUS_FACTOR_MIN_SCORE = 0.9  # decayed authored score: one commit this week (1.0 decays to 0.97 in a week)
 BUS_FACTOR_MIN_SHARE = 0.10  # of the module's total authored score
 BUS_FACTOR_WINDOW = 180 * 86400  # last authored touch within this many seconds
+
+
+# Decision extraction (ingest/extract.py, M5).
+EXTRACT_MIN_PR_BODY = 300  # characters of human-written PR body, after stripping bot blocks
+EXTRACT_MIN_ISSUE_COMMENTS = 5  # human comments on a closed issue
+EXTRACT_MAX_INPUT_CHARS = 24000  # per candidate prompt; longer text is cut at the end
+EXTRACT_MAX_MODULES = 40  # affected-module choices offered to the LLM per candidate
+# Merged PRs the golden "why" questions depend on; always candidates, and first in --sample.
+EXTRACT_MUST_INCLUDE: dict[str, list[int]] = {"FalkorDB/FalkorDB": [2678, 2349, 2279, 2695]}
+# Decisions below this confidence stay in the graph but are excluded from answers.
+DECISION_MIN_CONFIDENCE = 0.6
+
+# Free-tier pacing for the fast (Gemini) endpoint: minimum seconds between uncached calls,
+# and retries with exponential backoff on 429 / 5xx.
+LLM_MIN_INTERVAL = 4.5  # ~13 requests per minute
+LLM_MAX_RETRIES = 6
+
+
+@dataclass(frozen=True)
+class Topic:
+    id: str
+    covers: str
+    paths: str = ""
+    labels: str = ""
+
+
+# Sandbox topics: TOPICS.md gives only the ids, so the hints live here (from SANDBOX_STORY.md).
+_SANDBOX_TOPIC_HINTS = {
+    "link-cache": ("Caching resolved links: in-process LRU, Redis, TTLs, invalidation", "cache/"),
+    "short-codes": ("Generating short codes: format, length, randomness, aliases", "api/"),
+    "redirects": ("Redirect handling and short-code lookup", "api/"),
+    "analytics": ("Click counting, dashboards, CSV export", "analytics/"),
+    "storage": ("Database, compaction, locks", "storage/"),
+    "api-limits": ("Rate limits and quotas on the API", "api/"),
+    "docs": ("Documentation and ADRs", "docs/"),
+}
+
+
+def _parse_topics_md(text: str) -> tuple[list[Topic], list[str]]:
+    """The FalkorDB table rows (| n | `id` | covers | paths | labels |) and the sandbox id list."""
+    topics = []
+    for line in text.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) == 5 and cells[0].isdigit():
+            topics.append(Topic(cells[1].strip("`"), cells[2], cells[3], cells[4]))
+    m = re.search(r"For the sandbox org.*?list.*?:(.*)", text)
+    sandbox = re.findall(r"`([a-z0-9-]+)`", m.group(1)) if m else []
+    return topics, sandbox
+
+
+@lru_cache
+def topics_for(org: str) -> tuple[Topic, ...]:
+    """Fixed topic list for an org: docs/TOPICS.md for FalkorDB, the short list for the sandbox."""
+    org_topics, sandbox_ids = _parse_topics_md(TOPICS_FILE.read_text(encoding="utf-8"))
+    sandbox_owner = get_settings().sandbox_repo.split("/")[0].lower()
+    if org.lower() == sandbox_owner:
+        return tuple(Topic(t, *_SANDBOX_TOPIC_HINTS.get(t, ("", ""))) for t in sandbox_ids)
+    return tuple(org_topics)
 
 
 class Settings(BaseSettings):
