@@ -98,6 +98,9 @@ DUPLICATE_MAX_DISTANCE = 0.15
 RISK_MAX_MODULES = 30
 RISK_BRIDGE_PEOPLE = 5
 
+# Navigator (M9): tool calls per question, find_entities included (remember, step 7, is not counted).
+NAVIGATOR_MAX_TOOL_CALLS = 4
+
 # Free-tier pacing for the fast (Gemini) endpoint: minimum seconds between uncached calls,
 # and retries with exponential backoff on 429 / 5xx.
 LLM_MIN_INTERVAL = 4.5  # ~13 requests per minute
@@ -169,6 +172,8 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dim: int = 384
     llm_daily_call_cap: int = 2000
+    # Agents fall back to this model on the fast (Gemini) endpoint after a Groq 429 or tool-call error.
+    llm_fallback_model: str = "gemini-3.8-flash"
 
     github_webhook_secret: str = ""
     # Signs triage approvals: the UI mints a token for (issue, exact draft) when a human clicks

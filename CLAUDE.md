@@ -90,7 +90,9 @@ uv run --directory backend python scripts/extract.py --repo FalkorDB/FalkorDB --
 uv run --directory backend python scripts/embed.py --org FalkorDB     # chunk docs, embed Decision/Issue/DocChunk, vector indexes
 uv run --directory backend python scripts/find.py --org FalkorDB "Why ...?"   # query 2 entry points (--issue "title": query 9; --check: M6 golden checks)
 uv run --directory backend python -m lore.mcp_server            # lore-mcp tool server over stdio (ten tools)
-# add: ask, eval, serve commands as they are created
+uv run --directory backend python scripts/ask.py --org FalkorDB --user amrith "Who owns the query planner?"   # Navigator: answer, path, Cypher (--no-remember, --brief, --json)
+uv run --directory backend python scripts/eval.py               # golden set q01-q10 + s01-s03 + n01 -> docs/eval_results.md (--only q05 q08)
+# add: serve command as it is created
 ```
 
 ## Conventions

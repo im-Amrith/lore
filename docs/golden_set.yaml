@@ -213,6 +213,8 @@ spares:
   - question: "Why was Bolt support removed?"
     must_cite: ["https://github.com/FalkorDB/FalkorDB/pull/2170", "https://github.com/FalkorDB/FalkorDB/issues/2169"]
     expected: "Removed in PR #2170 (Jul 2026). Neither page gives a reason, so the right answer is 'no reason recorded' plus the links. Use as a second not-found test."
+    id: n01
+    expect_not_found: true
 
 # Sandbox checks (lore-sandbox). See docs/SANDBOX_STORY.md.
 sandbox:
@@ -227,11 +229,21 @@ sandbox:
       That decision was superseded by PR 6: the Redis hop raised p99 from 4 ms to 12 ms (#6) and the service
       now runs 2 replicas in one region, so it went back to an in-process LRU with pub/sub invalidation.
       Cites PR 6, #6, ADR 0003, and shows PR 1 as history.
+    # Eval checks (before the reversal). PR 1 is lore-sandbox#11; draft PR 6 is #16.
+    must_cite:
+      - https://github.com/im-Amrith/lore-sandbox/pull/11
+      - https://github.com/im-Amrith/lore-sandbox/issues/1
+      - https://github.com/im-Amrith/lore-sandbox/blob/main/docs/adr/0001-link-cache.md
+    key_facts: ["Redis", "replica", "deploy", "LRU"]
   - id: s02
     type: owns
     question: "Who owns analytics?"
     expected: "CODEOWNERS lists <reviewer-login>, but all analytics commits are by Priya Raman. Ask Priya."
+    must_cite: []
+    key_facts: ["im-Angel2305", "Priya"]
   - id: s03
     type: risk
     question: "Which modules depend on one person?"
     expected: "storage/: every commit is by Marta Silva (the listed owner, <your-login>, has never touched it)."
+    must_cite: []
+    key_facts: ["storage", "Marta"]
