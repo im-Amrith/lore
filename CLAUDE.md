@@ -89,6 +89,7 @@ uv run --directory backend python scripts/derive.py --org FalkorDB --report --al
 uv run --directory backend python scripts/extract.py --repo FalkorDB/FalkorDB --sample 30   # LLM decisions + topics, printed (--list: no LLM; --load: write; --all-prs: sandbox)
 uv run --directory backend python scripts/embed.py --org FalkorDB     # chunk docs, embed Decision/Issue/DocChunk, vector indexes
 uv run --directory backend python scripts/find.py --org FalkorDB "Why ...?"   # query 2 entry points (--issue "title": query 9; --check: M6 golden checks)
+uv run --directory backend python -m lore.mcp_server            # lore-mcp tool server over stdio (ten tools)
 # add: ask, eval, serve commands as they are created
 ```
 

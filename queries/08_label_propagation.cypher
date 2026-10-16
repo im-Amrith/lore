@@ -5,7 +5,8 @@
 // Groups of one (isolated people, bots) are dropped.
 CALL algo.labelPropagation({nodeLabels: ['Person'], relationshipTypes: ['COLLABORATES_STRONG']})
 YIELD node, communityId
-WITH communityId, collect(coalesce(node.login, node.name)) AS members, count(*) AS size
+WITH communityId, collect(coalesce(node.login, node.name)) AS members, collect(node.id) AS member_ids,
+     count(*) AS size
 WHERE size >= 2
-RETURN communityId AS group_id, size, members
+RETURN communityId AS group_id, size, members, member_ids
 ORDER BY size DESC

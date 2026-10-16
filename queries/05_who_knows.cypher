@@ -5,10 +5,11 @@
 // Reviewed PRs on the module are returned too (evidence_reviews), so someone whose score
 // comes only from reviews still has a link to show. They're collected in a separate
 // WITH stage to avoid multiplying the commit rows.
+// $since (epoch seconds, 0 for all time) keeps only people whose last touch is that recent.
 // FalkorDB keeps the input order inside collect(), so ORDER BY before collecting
 // puts the most recent PRs and commits first.
 MATCH (p:Person)-[e:EXPERT_IN]->(m:Module {id: $module})
-WHERE e.score > 0.5
+WHERE e.score > 0.5 AND coalesce(e.last_touch, 0) >= $since
 OPTIONAL MATCH (p)-[:AUTHORED]->(c:Commit)-[:TOUCHES]->(m)
 WHERE NOT coalesce(c.bulk, false)
 OPTIONAL MATCH (c)-[:PART_OF]->(pr:PullRequest)

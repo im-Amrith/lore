@@ -8,11 +8,13 @@
 //     not a drive-by fix
 //   - last_authored within $window seconds (180 days)
 // Values live in config.py (BUS_FACTOR_*).
+// $repo (repo name, or '' for all) limits the list to one repo's modules (Module.repo).
 // Modules whose total authored score is 0 (only bots or bulk commits) are left out.
 // Order: single points of failure first (1, 2, ...), then dormant modules (bus_factor 0:
 // nobody has authored a real share in the window) at the end, so tiny old modules don't
 // crowd out the risk list.
 MATCH (m:Module)
+WHERE $repo = '' OR m.repo = $repo
 OPTIONAL MATCH (:Person)-[x:EXPERT_IN]->(m)
 WITH m, sum(coalesce(x.authored, 0.0)) AS total
 WHERE total > 0
@@ -21,8 +23,8 @@ WHERE e.authored >= $min_score AND e.authored >= $min_share * total
   AND e.last_authored > $now - $window
 WITH m, total, p, e ORDER BY e.authored DESC
 WITH m, total,
-     collect(coalesce(p.login, p.name)) AS experts,
+     collect(coalesce(p.login, p.name)) AS experts, collect(p.id) AS expert_ids,
      collect(round(100.0 * e.authored / total)) AS shares
-RETURN m.id AS module_id, m.path AS module, size(experts) AS bus_factor, experts,
+RETURN m.id AS module_id, m.path AS module, size(experts) AS bus_factor, experts, expert_ids,
        shares AS share_pct, total AS total_score
 ORDER BY CASE WHEN bus_factor = 0 THEN 1 ELSE 0 END, bus_factor ASC, total_score DESC

@@ -21,6 +21,6 @@ OPTIONAL MATCH (x:Person)-[xe:EXPERT_IN]->(m)
 WHERE xe.score > 0.5
 WITH m, owners, x, xe ORDER BY xe.score DESC
 WITH m, owners,
-     collect({person: coalesce(x.login, x.name), score: xe.score, last_touch: xe.last_touch})[0..3] AS experts
+     collect({id: x.id, person: coalesce(x.login, x.name), score: xe.score, last_touch: xe.last_touch})[0..3] AS experts
 RETURN m.id AS module_id, m.path AS module, size(owners) > 0 AS listed_owner, owners,
        experts AS active_experts

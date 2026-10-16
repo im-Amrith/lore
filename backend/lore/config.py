@@ -87,6 +87,17 @@ ENTRY_CANDIDATES = 20
 ENTRY_TEXT_CANDIDATES = 3
 RRF_TEXT_WEIGHT = 0.5
 
+# Triage (related_work, M8). Distances are cosine distances (0 = same direction, lower = closer).
+SIMILAR_MAX_DISTANCE = 0.5  # similar issues further than this are not shown
+# Duplicate candidate below this. Measured on the sandbox: a restatement of #3 is 0.10 from it; related
+# but different issues sit at 0.19 (CSV clicks missing vs #9 CSV timeout; #6 vs #1), the demo issue 0.35 from #3.
+DUPLICATE_MAX_DISTANCE = 0.15
+
+# lore-mcp (M8): knowledge_risk lists at most this many modules with bus factor >= 1, and the
+# top RISK_BRIDGE_PEOPLE by betweenness.
+RISK_MAX_MODULES = 30
+RISK_BRIDGE_PEOPLE = 5
+
 # Free-tier pacing for the fast (Gemini) endpoint: minimum seconds between uncached calls,
 # and retries with exponential backoff on 429 / 5xx.
 LLM_MIN_INTERVAL = 4.5  # ~13 requests per minute
@@ -160,6 +171,9 @@ class Settings(BaseSettings):
     llm_daily_call_cap: int = 2000
 
     github_webhook_secret: str = ""
+    # Signs triage approvals: the UI mints a token for (issue, exact draft) when a human clicks
+    # approve; post_triage refuses without it. Empty = every post is refused.
+    triage_approval_secret: str = ""
 
 
 @lru_cache

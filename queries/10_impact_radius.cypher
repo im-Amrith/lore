@@ -1,5 +1,6 @@
 // 10 F8 impact radius: what usually changes together with $module, the active decisions
 // that affect those modules, and who knows them best (top EXPERT_IN).
+// Decisions below $min_confidence (DECISION_MIN_CONFIDENCE) are left out, as everywhere.
 // share = count / commits that touched $module under the same filter as the derive job
 // (not bulk, <= $max_modules modules), e.g. "half of parser commits also touch planner".
 MATCH (m:Module {id: $module})<-[:TOUCHES]-(c:Commit)-[:TOUCHES]->(x:Module)
@@ -9,11 +10,12 @@ WITH m, sum(CASE WHEN k <= $max_modules THEN 1 ELSE 0 END) AS base
 MATCH (m)-[r:CO_CHANGED]-(n:Module)
 WHERE r.count >= $min_count
 OPTIONAL MATCH (d:Decision {status: 'active'})-[:AFFECTS]->(n)
-WITH m, base, n, r, collect(DISTINCT {id: d.id, statement: d.statement}) AS decisions
+WHERE d.confidence >= $min_confidence
+WITH m, base, n, r, collect(DISTINCT {id: d.id, statement: d.statement, kind: d.kind, source_url: d.source_url}) AS decisions
 OPTIONAL MATCH (p:Person)-[e:EXPERT_IN]->(n)
 WITH base, n, r, decisions, p, e ORDER BY e.score DESC
 WITH base, n, r, decisions,
-     [x IN collect({person: coalesce(p.login, p.name), score: e.score}) WHERE x.person IS NOT NULL][0..3] AS experts
+     [x IN collect({id: p.id, person: coalesce(p.login, p.name), score: e.score}) WHERE x.person IS NOT NULL][0..3] AS experts
 RETURN n.id AS module_id, n.path AS module, r.count AS count,
        CASE WHEN base > 0 THEN round(100.0 * r.count / base) ELSE 0 END AS share_pct,
        base AS module_commits,

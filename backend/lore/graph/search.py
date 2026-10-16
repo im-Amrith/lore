@@ -81,31 +81,39 @@ def embed_query(text: str) -> list[float]:
     return embed([QUERY_PREFIX + text])[0]
 
 
-def find_decisions(graph: Graph, question: str, limit: int = 5, vec: list[float] | None = None) -> list[dict[str, Any]]:
+def find_decisions(graph: Graph, question: str, limit: int = 5, vec: list[float] | None = None,
+                   ro=ro_query) -> list[dict[str, Any]]:
     q_text = fulltext_query(question)
-    return ro_query(graph, "entry_decisions", {
+    return ro(graph, "entry_decisions", {
         "q_text": q_text, "q_vec": vec or embed_query(question), "k": ENTRY_CANDIDATES,
         "text_k": ENTRY_TEXT_CANDIDATES, "text_weight": RRF_TEXT_WEIGHT, "rrf_k": RRF_K,
         "min_confidence": DECISION_MIN_CONFIDENCE, "limit": limit,
     })
 
 
-def find_start(graph: Graph, question: str, limit: int = 5) -> dict[str, list[dict[str, Any]]]:
-    """Candidate starting nodes for a question, in the order they should be tried."""
+def find_start(graph: Graph, question: str, limit: int = 5, ro=ro_query,
+               kinds: tuple[str, ...] = ("decisions", "docs", "prs", "issues")) -> dict[str, list[dict[str, Any]]]:
+    """Candidate starting nodes for a question, in the order they should be tried.
+    `ro` runs each named query (lore-mcp passes one that records the Cypher); `kinds` limits
+    which entry queries run."""
     vec = embed_query(question)
-    return {
-        "decisions": find_decisions(graph, question, limit, vec),
-        "docs": ro_query(graph, "entry_docs", {"q_vec": vec, "k": limit * 2, "limit": limit}),
-        "prs": ro_query(graph, "entry_prs", {"q_text": keyword_query(question), "limit": limit}),
-        "issues": ro_query(graph, "entry_issues", {"q_vec": vec, "k": limit, "limit": limit}),
-    }
+    out: dict[str, list[dict[str, Any]]] = {}
+    if "decisions" in kinds:
+        out["decisions"] = find_decisions(graph, question, limit, vec, ro=ro)
+    if "docs" in kinds:
+        out["docs"] = ro(graph, "entry_docs", {"q_vec": vec, "k": limit * 2, "limit": limit})
+    if "prs" in kinds:
+        out["prs"] = ro(graph, "entry_prs", {"q_text": keyword_query(question), "limit": limit})
+    if "issues" in kinds:
+        out["issues"] = ro(graph, "entry_issues", {"q_vec": vec, "k": limit, "limit": limit})
+    return out
 
 
 def similar_issues(graph: Graph, title: str, body: str = "", issue_id: str | None = None,
-                   limit: int = 5, max_distance: float = 0.5) -> list[dict[str, Any]]:
+                   limit: int = 5, max_distance: float = 0.5, ro=ro_query) -> list[dict[str, Any]]:
     """Query 9: issues nearest to a (new) issue, with the PRs that closed them and the modules
     those PRs touched. The issue is embedded exactly like stored issues (no query prefix)."""
     vec = embed([issue_text(title, body)])[0]
-    return ro_query(graph, "similar_issues", {
+    return ro(graph, "similar_issues", {
         "issue_vec": vec, "issue_id": issue_id, "k": limit + 1, "max_distance": max_distance, "limit": limit,
     })

@@ -38,7 +38,8 @@ WITH d, vec_rank, text_rank, distance,
        * coalesce(d.weight, 1.0) AS rank
 OPTIONAL MATCH (d)-[:DECIDED_IN]->(src)
 RETURN d.id AS id, d.statement AS statement, d.kind AS kind, d.status AS status,
-       d.confidence AS confidence, collect(src.id) AS sources,
+       d.confidence AS confidence, d.source_id AS source_id, d.source_url AS source_url,
+       collect(src.id) AS sources,
        vec_rank, text_rank, distance, rank
 ORDER BY rank DESC
 LIMIT $limit

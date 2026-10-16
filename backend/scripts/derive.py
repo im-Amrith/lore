@@ -30,6 +30,7 @@ from lore.config import (  # noqa: E402
     BETWEENNESS_SEED,
     CO_CHANGE_MAX_MODULES,
     CO_CHANGE_MIN_COUNT,
+    DECISION_MIN_CONFIDENCE,
     IMPACT_MIN_COUNT,
     LPA_MIN_WEIGHT,
     graph_name,
@@ -64,7 +65,7 @@ def derive(g, now: int) -> None:
 def report(g, now: int, modules: list[str], top: int) -> None:
     for module in modules:
         print(f"\n[05 who_knows] {module}")
-        rows = ro_query(g, "who_knows", {"module": module})
+        rows = ro_query(g, "who_knows", {"module": module, "since": 0})
         if not rows:
             print("  not found: no one with score > 0.5")
         for r in rows:
@@ -94,7 +95,7 @@ def report(g, now: int, modules: list[str], top: int) -> None:
     print(f"\n[07 bus_factor] min_score {BUS_FACTOR_MIN_SCORE}, min_share {BUS_FACTOR_MIN_SHARE}, "
           f"window {BUS_FACTOR_WINDOW // 86400}d (top {top})")
     params = {"now": now, "min_score": BUS_FACTOR_MIN_SCORE,
-              "min_share": BUS_FACTOR_MIN_SHARE, "window": BUS_FACTOR_WINDOW}
+              "min_share": BUS_FACTOR_MIN_SHARE, "window": BUS_FACTOR_WINDOW, "repo": ""}
     for r in ro_query(g, "bus_factor", params)[:top]:
         experts = ", ".join(f"{p} {s:.0f}%" for p, s in zip(r["experts"], r["share_pct"]))
         print(f"  {r['module']:<24} bus_factor {r['bus_factor']}  total {r['total_score']:6.1f}  {experts}")
@@ -124,7 +125,8 @@ def algo_report(g, impact: list[str], top: int) -> None:
 
     for module in impact:
         rows = timed(g, "impact_radius", {"module": module, "max_modules": CO_CHANGE_MAX_MODULES,
-                                          "min_count": IMPACT_MIN_COUNT, "limit": top})
+                                          "min_count": IMPACT_MIN_COUNT, "limit": top,
+                                          "min_confidence": DECISION_MIN_CONFIDENCE})
         print(f"  impact radius of {module}")
         if not rows:
             print(f"  not found: no module co-changed >= {IMPACT_MIN_COUNT} times")
