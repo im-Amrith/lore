@@ -8,7 +8,8 @@ print the expertise report (queries 5, 6 and 7) and the algorithm report (querie
 
 Every derived edge type is dropped and rebuilt each run. EXPERT_IN: authored commits, then
 reviews at half weight, then the combined score (bots and bulk commits skipped).
-COLLABORATES: author -> reviewer, weight = distinct PRs (bots and self-reviews skipped).
+COLLABORATES: author -> reviewer, weight = distinct PRs (bots and self-reviews skipped);
+COLLABORATES_STRONG copies the edges with weight >= LPA_MIN_WEIGHT for label propagation.
 CO_CHANGED: module pairs in the same commit (bulk commits and commits touching more than
 CO_CHANGE_MAX_MODULES modules skipped).
 """
@@ -30,12 +31,13 @@ from lore.config import (  # noqa: E402
     CO_CHANGE_MAX_MODULES,
     CO_CHANGE_MIN_COUNT,
     IMPACT_MIN_COUNT,
+    LPA_MIN_WEIGHT,
     graph_name,
 )
 from lore.graph import get_graph, query, ro_query  # noqa: E402
 
 DERIVE_JOBS = ["expert_reset", "expert_authored", "expert_reviewed", "expert_score",
-               "collaborates_reset", "collaborates", "co_changed_reset", "co_changed"]
+               "collaborates_reset", "collaborates", "collaborates_strong", "co_changed_reset", "co_changed"]
 
 
 def parse_now(value: str | None) -> int:
@@ -53,7 +55,8 @@ def day(ts: int | None) -> str:
 def derive(g, now: int) -> None:
     for job in DERIVE_JOBS:
         t = time.perf_counter()
-        params = {"now": now, "max_modules": CO_CHANGE_MAX_MODULES, "min_count": CO_CHANGE_MIN_COUNT}
+        params = {"now": now, "max_modules": CO_CHANGE_MAX_MODULES, "min_count": CO_CHANGE_MIN_COUNT,
+                  "min_weight": LPA_MIN_WEIGHT}
         rows = query(g, job, params)
         print(f"  {job:<18} {rows[0] if rows else {}}  ({time.perf_counter() - t:.2f}s)")
 

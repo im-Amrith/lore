@@ -138,6 +138,7 @@ The tables below list every label and relationship, including Repo, Topic, Comme
 | EXPERT_IN *(derived)* | Person → Module | `score`, `last_touch`, `evidence` |
 | CO_CHANGED *(derived)* | Module → Module | `count` |
 | COLLABORATES *(derived)* | Person → Person | `weight` (shared PRs and reviews) |
+| COLLABORATES_STRONG *(derived)* | Person → Person | `weight`; COLLABORATES with weight >= 2, used only by label propagation (it does not settle on the full graph) |
 
 **Memory nodes** (same graph, scoped by user)
 
@@ -360,7 +361,7 @@ RETURN node.login, score ORDER BY score DESC LIMIT 10
 Real working groups for the team map (F10):
 
 ```cypher
-CALL algo.labelPropagation({nodeLabels: ['Person'], relationshipTypes: ['COLLABORATES']})
+CALL algo.labelPropagation({nodeLabels: ['Person'], relationshipTypes: ['COLLABORATES_STRONG']})
 YIELD node, communityId
 RETURN communityId, collect(node.login) AS members, count(*) AS size
 ORDER BY size DESC

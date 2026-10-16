@@ -56,6 +56,7 @@ IMPACT_MIN_COUNT = 3  # CO_CHANGED count shown in the impact radius
 # Graph algorithms on COLLABORATES (queries/08_*, M7).
 BETWEENNESS_SAMPLING_SIZE = 200  # source nodes sampled; FalkorDB has ~300 people
 BETWEENNESS_SEED = 42  # fixed so the bridge-people ranking is repeatable
+LPA_MIN_WEIGHT = 2  # COLLABORATES_STRONG: shared PRs needed for label propagation to settle
 
 
 # Decision extraction (ingest/extract.py, M5).

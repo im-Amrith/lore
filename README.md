@@ -36,8 +36,8 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | 01 | load_topics, load_decisions, load_decisions_reset, load_affects, load_proposed, load_approved, load_about | Load extracted Decisions with DECIDED_IN, AFFECTS, PROPOSED, APPROVED and ABOUT edges |
 | 20 | extract_pr_candidates, extract_issue_candidates, extract_doc_candidates, extract_repo_modules | Pick what the LLM reads: merged PRs with real descriptions, closed issues with 5+ human comments, docs/ADRs; bot text excluded |
 | 07 | bus_factor | F4: people per module with a real, recent share of authored work (single points of failure first) |
-| 08 | collaborates_reset, collaborates | Derive `COLLABORATES` author -> reviewer, `weight` = distinct PRs; skips bots and self-reviews |
-| 08 | pagerank, betweenness, label_propagation | `algo.pageRank` (most relied-on reviewers), `algo.betweenness` with fixed `samplingSeed` (F4 bridge people), `algo.labelPropagation` (F10 working groups) on COLLABORATES |
+| 08 | collaborates_reset, collaborates, collaborates_strong | Derive `COLLABORATES` author -> reviewer, `weight` = distinct PRs; skips bots and self-reviews; `COLLABORATES_STRONG` (weight >= 2) for label propagation, which doesn't settle on the full graph |
+| 08 | pagerank, betweenness, label_propagation | `algo.pageRank` (most relied-on reviewers), `algo.betweenness` with fixed `samplingSeed` (F4 bridge people), `algo.labelPropagation` (F10 working groups, on COLLABORATES_STRONG) |
 | 10 | co_changed_reset, co_changed, impact_radius | Derive `CO_CHANGED` from commits touching 2-6 modules (bulk skipped); F8: co-changed modules with share of commits, active decisions and top experts |
 
 ## Setup
