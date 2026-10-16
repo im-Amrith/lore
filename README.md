@@ -25,7 +25,11 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | # | Name | Purpose |
 | --- | --- | --- |
 | 00 | healthcheck | Creates and returns a test node in the `lore_healthcheck` graph |
-| 02 | find_decision_text | Entry point: full-text search over Decisions, only confidence >= 0.6, parity ranked lower |
+| 02 | entry_decisions | Entry point, tried first: Decision vector search (cosine distance) fused with full-text on the question's specific terms by weighted reciprocal rank fusion; confidence >= 0.6, parity at half weight |
+| 02 | entry_docs, entry_prs, entry_issues | Fallback starting nodes: nearest doc chunks and issues (vector), PRs (full-text) |
+| 09 | similar_issues | F5 triage: nearest past issues (vector), the PRs that closed them and the modules those PRs touched |
+| 01 | load_indexes, load_doc_chunks, load_doc_chunks_reset | Range, full-text and vector indexes (`EMBEDDING_DIM`, cosine); docs cut into ~800-char overlapping `DocChunk`s, `(DocChunk)-[:PART_OF]->(Doc)` |
+| 21 | embed_*_texts, embed_set_* | Read the text to embed per Decision (statement + rationale + quote), Issue (title + 500 body chars) and DocChunk; write `vecf32` embeddings |
 | 04 | expert_reset, expert_authored, expert_reviewed, expert_score | Derive `EXPERT_IN`: authored commits with a 180-day half-life, reviews at half weight, combined `score`; skips bots and bulk (> 500 file) commits |
 | 05 | who_knows | F2: top experts on a module, with the PRs and commits behind each score |
 | 06 | paper_owners, team_owners, module_owners | F3: CODEOWNERS owners with no touch in 12 months vs the real experts; team-owned modules; one module's owners ("no listed owner" when none) |
@@ -44,6 +48,8 @@ cd backend; uv sync; cd ..                    # backend deps (Python 3.11)
 uv run --directory backend python scripts/healthcheck.py
 uv run --directory backend pytest
 uv run --directory backend python scripts/derive.py --org FalkorDB --report   # EXPERT_IN + queries 5-7
+uv run --directory backend python scripts/embed.py --org FalkorDB            # chunk docs, embeddings, vector indexes
+uv run --directory backend python scripts/find.py --check                     # queries 2 and 9 against the golden set
 ```
 
 ## Demo
@@ -57,3 +63,4 @@ This project is built with Claude Code (Anthropic) as a coding assistant. The pl
 - M0 scaffold (repo layout, Docker Compose, config, FalkorDB client, query loader, healthcheck): written with Claude Code.
 - M4 expertise (queries 04-07, `scripts/derive.py`, bus-factor tuning against the golden set): written with Claude Code.
 - M5 decisions (`backend/lore/llm/`, `ingest/extract.py`, extraction prompt, queries 01 decision loaders and 20): written with Claude Code. Decision extraction itself runs on Gemini (`LLM_FAST_MODEL`); every decision keeps a verified source quote and link.
+- M6 embeddings (`ingest/embed.py`, `graph/search.py`, queries 02, 09 and 21, `scripts/embed.py`, `scripts/find.py`): written with Claude Code, including the fusion tuning against q01-q04 and s01 (measured ranks are in `queries/02_entry_decisions.cypher`). Embeddings run locally with fastembed (`BAAI/bge-small-en-v1.5`).

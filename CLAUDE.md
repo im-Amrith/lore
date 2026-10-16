@@ -87,6 +87,8 @@ uv run --directory backend python scripts/fetch.py --repo FalkorDB/FalkorDB   # 
 uv run --directory backend python scripts/load.py --repo im-Amrith/lore-sandbox  # data/raw -> graph lore_<owner>; prints counts
 uv run --directory backend python scripts/derive.py --org FalkorDB --report  # rebuild EXPERT_IN, print queries 5-7 (--module <id>, --now <date>, --no-derive)
 uv run --directory backend python scripts/extract.py --repo FalkorDB/FalkorDB --sample 30   # LLM decisions + topics, printed (--list: no LLM; --load: write; --all-prs: sandbox)
+uv run --directory backend python scripts/embed.py --org FalkorDB     # chunk docs, embed Decision/Issue/DocChunk, vector indexes
+uv run --directory backend python scripts/find.py --org FalkorDB "Why ...?"   # query 2 entry points (--issue "title": query 9; --check: M6 golden checks)
 # add: ask, eval, serve commands as they are created
 ```
 

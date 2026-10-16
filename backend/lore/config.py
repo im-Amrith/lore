@@ -15,6 +15,7 @@ RAW_DIR = DATA_DIR / "raw"
 CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 LLM_CACHE_DIR = CACHE_DIR / "llm"
+EMBED_MODEL_DIR = CACHE_DIR / "fastembed"
 TOPICS_FILE = REPO_ROOT / "docs" / "TOPICS.md"
 
 # Separate graph for the healthcheck so test nodes never land in an org graph.
@@ -61,6 +62,20 @@ DECISION_MIN_CONFIDENCE = 0.6
 # openCypher) are real reasons but say less about this project, so they rank lower.
 # "test" decisions are dropped at extraction and never loaded.
 DECISION_KIND_WEIGHT = {"architecture": 1.0, "behavior": 1.0, "process": 1.0, "parity": 0.5, "test": 0.0}
+
+# Embeddings and the entry point (M6). Issue text is title + the first ISSUE_EMBED_BODY chars
+# of the body; docs are cut into ~DOC_CHUNK_CHARS chunks that overlap by DOC_CHUNK_OVERLAP.
+ISSUE_EMBED_BODY = 500
+DOC_CHUNK_CHARS = 800
+DOC_CHUNK_OVERLAP = 150
+# Query 2 fuses vector and full-text ranks with reciprocal rank fusion: w / (RRF_K + rank).
+# Vector: top ENTRY_CANDIDATES at weight 1. Full-text: only its top ENTRY_TEXT_CANDIDATES at
+# RRF_TEXT_WEIGHT: an OR query over a question's words has a long noisy tail (q02/q03's
+# decisions are not in its top 20), so it may only lift a precise match. Tuned on q01-q04 + s01.
+RRF_K = 60
+ENTRY_CANDIDATES = 20
+ENTRY_TEXT_CANDIDATES = 3
+RRF_TEXT_WEIGHT = 0.5
 
 # Free-tier pacing for the fast (Gemini) endpoint: minimum seconds between uncached calls,
 # and retries with exponential backoff on 429 / 5xx.

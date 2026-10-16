@@ -11,17 +11,19 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from lore.config import get_settings
+from lore.config import EMBED_MODEL_DIR, get_settings
 from lore.llm.cache import cache_get, cache_key, cache_put, count_call
 
-BATCH = 256
+BATCH = 256  # texts per cache/counter batch
+MODEL_BATCH = 16  # texts per ONNX run: 256 long texts at once needs >1 GB for attention
 
 
 @lru_cache
 def _model(name: str):
     from fastembed import TextEmbedding  # heavy import (onnxruntime); load on first use
 
-    return TextEmbedding(model_name=name)
+    # Downloaded once into data/cache/fastembed (gitignored), not the system temp dir.
+    return TextEmbedding(model_name=name, cache_dir=str(EMBED_MODEL_DIR))
 
 
 def embed(texts: list[str]) -> list[list[float]]:
@@ -32,7 +34,7 @@ def embed(texts: list[str]) -> list[list[float]]:
     for start in range(0, len(todo), BATCH):
         idx = todo[start:start + BATCH]
         count_call("embed")
-        vectors = list(_model(s.embedding_model).embed([texts[i] for i in idx]))
+        vectors = list(_model(s.embedding_model).embed([texts[i] for i in idx], batch_size=MODEL_BATCH))
         for i, v in zip(idx, vectors):
             vec = [float(x) for x in v]
             if len(vec) != s.embedding_dim:

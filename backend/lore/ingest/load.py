@@ -6,6 +6,7 @@ from typing import Callable
 
 from falkordb import Graph
 
+from lore.config import get_settings
 from lore.graph import load_query, query
 from lore.ingest.normalize import Rows
 
@@ -40,7 +41,7 @@ def create_indexes(graph: Graph, log: Callable[[str], None] = print) -> None:
         if not stmt:
             continue
         try:
-            graph.query(stmt)
+            graph.query(stmt, {"dim": get_settings().embedding_dim})
             created += 1
         except Exception as e:  # FalkorDB raises on an index that already exists
             if "already indexed" not in str(e).lower() and "already exists" not in str(e).lower():
