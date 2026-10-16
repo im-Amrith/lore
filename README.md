@@ -25,11 +25,12 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | # | Name | Purpose |
 | --- | --- | --- |
 | 00 | healthcheck | Creates and returns a test node in the `lore_healthcheck` graph |
+| 02 | find_decision_text | Entry point: full-text search over Decisions, only confidence >= 0.6, parity ranked lower |
 | 04 | expert_reset, expert_authored, expert_reviewed, expert_score | Derive `EXPERT_IN`: authored commits with a 180-day half-life, reviews at half weight, combined `score`; skips bots and bulk (> 500 file) commits |
 | 05 | who_knows | F2: top experts on a module, with the PRs and commits behind each score |
 | 06 | paper_owners, team_owners, module_owners | F3: CODEOWNERS owners with no touch in 12 months vs the real experts; team-owned modules; one module's owners ("no listed owner" when none) |
 | 01 | load_topics, load_decisions, load_decisions_reset, load_affects, load_proposed, load_approved, load_about | Load extracted Decisions with DECIDED_IN, AFFECTS, PROPOSED, APPROVED and ABOUT edges |
-| 20 | extract_pr_candidates, extract_issue_candidates, extract_doc_candidates | Pick what the LLM reads: merged PRs with real descriptions, closed issues with 5+ human comments, docs/ADRs; bot text excluded |
+| 20 | extract_pr_candidates, extract_issue_candidates, extract_doc_candidates, extract_repo_modules | Pick what the LLM reads: merged PRs with real descriptions, closed issues with 5+ human comments, docs/ADRs; bot text excluded |
 | 07 | bus_factor | F4: people per module with a real, recent share of authored work (single points of failure first) |
 
 ## Setup
