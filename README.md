@@ -36,6 +36,9 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | 01 | load_topics, load_decisions, load_decisions_reset, load_affects, load_proposed, load_approved, load_about | Load extracted Decisions with DECIDED_IN, AFFECTS, PROPOSED, APPROVED and ABOUT edges |
 | 20 | extract_pr_candidates, extract_issue_candidates, extract_doc_candidates, extract_repo_modules | Pick what the LLM reads: merged PRs with real descriptions, closed issues with 5+ human comments, docs/ADRs; bot text excluded |
 | 07 | bus_factor | F4: people per module with a real, recent share of authored work (single points of failure first) |
+| 08 | collaborates_reset, collaborates | Derive `COLLABORATES` author -> reviewer, `weight` = distinct PRs; skips bots and self-reviews |
+| 08 | pagerank, betweenness, label_propagation | `algo.pageRank` (most relied-on reviewers), `algo.betweenness` with fixed `samplingSeed` (F4 bridge people), `algo.labelPropagation` (F10 working groups) on COLLABORATES |
+| 10 | co_changed_reset, co_changed, impact_radius | Derive `CO_CHANGED` from commits touching 2-6 modules (bulk skipped); F8: co-changed modules with share of commits, active decisions and top experts |
 
 ## Setup
 
@@ -47,7 +50,7 @@ docker compose up -d falkordb                 # FalkorDB on 6379, browser on htt
 cd backend; uv sync; cd ..                    # backend deps (Python 3.11)
 uv run --directory backend python scripts/healthcheck.py
 uv run --directory backend pytest
-uv run --directory backend python scripts/derive.py --org FalkorDB --report   # EXPERT_IN + queries 5-7
+uv run --directory backend python scripts/derive.py --org FalkorDB --report --algo --impact module:FalkorDB:graph/src/parser   # derived edges + queries 5-8, 10
 uv run --directory backend python scripts/embed.py --org FalkorDB            # chunk docs, embeddings, vector indexes
 uv run --directory backend python scripts/find.py --check                     # queries 2 and 9 against the golden set
 ```
@@ -62,5 +65,6 @@ This project is built with Claude Code (Anthropic) as a coding assistant. The pl
 
 - M0 scaffold (repo layout, Docker Compose, config, FalkorDB client, query loader, healthcheck): written with Claude Code.
 - M4 expertise (queries 04-07, `scripts/derive.py`, bus-factor tuning against the golden set): written with Claude Code.
+- M7 algorithms (queries 08 and 10, COLLABORATES / CO_CHANGED derive jobs, co-change module cap checked against golden q10): written with Claude Code.
 - M5 decisions (`backend/lore/llm/`, `ingest/extract.py`, extraction prompt, queries 01 decision loaders and 20): written with Claude Code. Decision extraction itself runs on Gemini (`LLM_FAST_MODEL`); every decision keeps a verified source quote and link.
 - M6 embeddings (`ingest/embed.py`, `graph/search.py`, queries 02, 09 and 21, `scripts/embed.py`, `scripts/find.py`): written with Claude Code, including the fusion tuning against q01-q04 and s01 (measured ranks are in `queries/02_entry_decisions.cypher`). Embeddings run locally with fastembed (`BAAI/bge-small-en-v1.5`).

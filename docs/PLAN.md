@@ -124,7 +124,7 @@ The tables below list every label and relationship, including Repo, Topic, Comme
 | REVIEWED | Person → PullRequest | `state` (approved / changes requested / commented), `at` |
 | MEMBER_OF | Person → Team |  |
 | OWNS | Person or Team → Module | `source: 'CODEOWNERS'` |
-| PART_OF | Module → Repo; Commit → PullRequest |  |
+| PART_OF | Module → Repo; Commit → PullRequest; DocChunk → Doc |  |
 | TOUCHES | Commit → Module | `additions`, `deletions`, `at` |
 | CLOSES | PullRequest → Issue |  |
 | REFERENCES | PullRequest, Issue, Comment, Doc → PullRequest, Issue, Commit, Doc | `at` |

@@ -1,12 +1,16 @@
-"""Run the derive jobs (queries/04_expert_*) on a graph, then optionally print the
-expertise report (queries 5, 6 and 7).
+"""Run the derive jobs (EXPERT_IN, COLLABORATES, CO_CHANGED) on a graph, then optionally
+print the expertise report (queries 5, 6 and 7) and the algorithm report (queries 8 and 10).
 
     uv run --directory backend python scripts/derive.py --graph lore_falkordb --report
     uv run --directory backend python scripts/derive.py --org im-Amrith --report --module module:lore-sandbox:storage
     uv run --directory backend python scripts/derive.py --graph lore_falkordb --now 2026-10-10   # "as of" a date
+    uv run --directory backend python scripts/derive.py --org FalkorDB --algo --impact module:FalkorDB:graph/src/parser
 
-EXPERT_IN is dropped and rebuilt each run: authored commits, then reviews at half weight,
-then the combined score. Bots and bulk commits are skipped.
+Every derived edge type is dropped and rebuilt each run. EXPERT_IN: authored commits, then
+reviews at half weight, then the combined score (bots and bulk commits skipped).
+COLLABORATES: author -> reviewer, weight = distinct PRs (bots and self-reviews skipped).
+CO_CHANGED: module pairs in the same commit (bulk commits and commits touching more than
+CO_CHANGE_MAX_MODULES modules skipped).
 """
 
 import argparse
@@ -21,11 +25,17 @@ from lore.config import (  # noqa: E402
     BUS_FACTOR_MIN_SCORE,
     BUS_FACTOR_MIN_SHARE,
     BUS_FACTOR_WINDOW,
+    BETWEENNESS_SAMPLING_SIZE,
+    BETWEENNESS_SEED,
+    CO_CHANGE_MAX_MODULES,
+    CO_CHANGE_MIN_COUNT,
+    IMPACT_MIN_COUNT,
     graph_name,
 )
 from lore.graph import get_graph, query, ro_query  # noqa: E402
 
-DERIVE_JOBS = ["expert_reset", "expert_authored", "expert_reviewed", "expert_score"]
+DERIVE_JOBS = ["expert_reset", "expert_authored", "expert_reviewed", "expert_score",
+               "collaborates_reset", "collaborates", "co_changed_reset", "co_changed"]
 
 
 def parse_now(value: str | None) -> int:
@@ -43,8 +53,9 @@ def day(ts: int | None) -> str:
 def derive(g, now: int) -> None:
     for job in DERIVE_JOBS:
         t = time.perf_counter()
-        rows = query(g, job, {"now": now})
-        print(f"  {job:<16} {rows[0] if rows else {}}  ({time.perf_counter() - t:.2f}s)")
+        params = {"now": now, "max_modules": CO_CHANGE_MAX_MODULES, "min_count": CO_CHANGE_MIN_COUNT}
+        rows = query(g, job, params)
+        print(f"  {job:<18} {rows[0] if rows else {}}  ({time.perf_counter() - t:.2f}s)")
 
 
 def report(g, now: int, modules: list[str], top: int) -> None:
@@ -86,6 +97,40 @@ def report(g, now: int, modules: list[str], top: int) -> None:
         print(f"  {r['module']:<24} bus_factor {r['bus_factor']}  total {r['total_score']:6.1f}  {experts}")
 
 
+def timed(g, name: str, params: dict) -> list[dict]:
+    t = time.perf_counter()
+    rows = ro_query(g, name, params)
+    print(f"\n[{name}] {len(rows)} rows in {time.perf_counter() - t:.2f}s")
+    return rows
+
+
+def algo_report(g, impact: list[str], top: int) -> None:
+    for r in timed(g, "pagerank", {"limit": top}):
+        print(f"  {r['person']:<20} {r['score']:.4f}  reviewed {r['prs_reviewed']} PRs "
+              f"for {r['authors_reviewed']} authors")
+
+    rows = timed(g, "betweenness", {"limit": top, "sampling_size": BETWEENNESS_SAMPLING_SIZE,
+                                    "seed": BETWEENNESS_SEED})
+    for i, r in enumerate(rows):
+        print(f"  {'*' if i < 5 else ' '} {r['person']:<20} {r['score']:.1f}")
+    if rows:
+        print(f"  bridge people (top 5): {', '.join(r['person'] for r in rows[:5])}")
+
+    for r in timed(g, "label_propagation", {}):
+        print(f"  group {r['group_id']} ({r['size']}): {', '.join(r['members'])}")
+
+    for module in impact:
+        rows = timed(g, "impact_radius", {"module": module, "max_modules": CO_CHANGE_MAX_MODULES,
+                                          "min_count": IMPACT_MIN_COUNT, "limit": top})
+        print(f"  impact radius of {module}")
+        if not rows:
+            print(f"  not found: no module co-changed >= {IMPACT_MIN_COUNT} times")
+        for r in rows:
+            experts = ", ".join(f"{e['person']} {e['score']:.1f}" for e in r["experts"])
+            print(f"  {r['module']:<28} {r['count']:4} commits ({r['share_pct']:.0f}% of "
+                  f"{r['module_commits']})  decisions {len(r['decisions'])}  experts: {experts}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     target = ap.add_mutually_exclusive_group(required=True)
@@ -96,6 +141,8 @@ def main() -> int:
     ap.add_argument("--no-derive", action="store_true", help="only print the report")
     ap.add_argument("--module", action="append", default=[], help="module id for who-knows/owners (repeatable)")
     ap.add_argument("--top", type=int, default=25, help="bus-factor rows to print")
+    ap.add_argument("--algo", action="store_true", help="print PageRank, betweenness, label propagation (query 8)")
+    ap.add_argument("--impact", action="append", default=[], help="module id for impact radius, query 10 (repeatable)")
     args = ap.parse_args()
 
     name = args.graph or graph_name(args.org)
@@ -106,6 +153,8 @@ def main() -> int:
         derive(g, now)
     if args.report or args.no_derive:
         report(g, now, args.module, args.top)
+    if args.algo or args.impact:
+        algo_report(g, args.impact, 10)
     return 0
 
 

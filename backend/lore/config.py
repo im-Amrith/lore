@@ -48,6 +48,15 @@ BUS_FACTOR_MIN_SCORE = 0.9  # decayed authored score: one commit this week (1.0 
 BUS_FACTOR_MIN_SHARE = 0.10  # of the module's total authored score
 BUS_FACTOR_WINDOW = 180 * 86400  # last authored touch within this many seconds
 
+# Co-change and impact radius (queries/10_*, M7). Golden q10: parser -> planner, runtime.
+CO_CHANGE_MAX_MODULES = 6  # commits touching more modules are refactors, not coupling
+CO_CHANGE_MIN_COUNT = 2  # commits a pair must share to get a CO_CHANGED edge
+IMPACT_MIN_COUNT = 3  # CO_CHANGED count shown in the impact radius
+
+# Graph algorithms on COLLABORATES (queries/08_*, M7).
+BETWEENNESS_SAMPLING_SIZE = 200  # source nodes sampled; FalkorDB has ~300 people
+BETWEENNESS_SEED = 42  # fixed so the bridge-people ranking is repeatable
+
 
 # Decision extraction (ingest/extract.py, M5).
 EXTRACT_MIN_PR_BODY = 300  # characters of human-written PR body, after stripping bot blocks
