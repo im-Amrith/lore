@@ -25,10 +25,17 @@ OPTIONAL MATCH (ia:Person)-[:AUTHORED]->(i)
 WITH pr, a, approvers, comments,
      collect(DISTINCT CASE WHEN i IS NOT NULL AND NOT coalesce(ia.is_bot, false)
              THEN {id: i.id, number: i.number, title: i.title, body: i.body, closes: type(l) = 'CLOSES'} END) AS issues
+// committers: who wrote the PR's commits, most commits first. When the opener wrote none
+// of them (sandbox PRs #14, #15 opened for Priya and Marta), extract.py proposes the top one.
+OPTIONAL MATCH (cp:Person)-[:AUTHORED]->(cc:Commit)-[:PART_OF]->(pr)
+WITH pr, a, approvers, comments, issues, cp, count(cc) AS n ORDER BY n DESC
+WITH pr, a, approvers, comments, issues,
+     collect(CASE WHEN cp IS NOT NULL
+             THEN {id: cp.id, login: cp.login, is_bot: coalesce(cp.is_bot, false), commits: n} END) AS committers
 RETURN pr.id AS id, 'pr' AS kind, pr.number AS number, pr.url AS url, pr.title AS title,
        pr.body AS body, pr.state AS state, pr.is_draft AS is_draft,
        pr.created_at AS created_at, pr.merged_at AS merged_at, pr.labels AS labels,
        pr.files AS files, pr.modules AS modules,
        a.id AS author_id, a.login AS author, coalesce(a.is_bot, false) AS author_is_bot,
-       approvers, comments, issues
+       approvers, comments, issues, committers
 ORDER BY number

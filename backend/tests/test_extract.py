@@ -60,7 +60,8 @@ def test_quote_match_ignores_markdown_and_breaks():
 
 def _cand(**kw):
     base = dict(id="pr:o/r#1", kind="pr", url="u", title="t", body="b", author="alice", author_id="person:alice",
-                approvers=["bob"], modules=["module:r:api", "module:r:cache"], at=100, label="PR #1")
+                approvers=["bob"], modules=["module:r:api", "module:r:cache"], at=100, label="PR #1",
+                proposer="alice", proposer_id="person:alice")
     base.update(kw)
     return Candidate(**base)
 
@@ -119,3 +120,36 @@ def test_pick_issues_closes_first_then_body_order():
     issues = [{"id": f"i{n}", "number": n, "closes": n == 9} for n in (5, 2280, 9, 7)]
     body = "Fix #2280\n\nAlso resolved: #7, #5"
     assert [i["number"] for i in pick_issues(issues, body, cap=3)] == [9, 2280, 7]
+
+
+def test_pick_proposer_uses_top_committer_when_opener_wrote_nothing():
+    from lore.ingest.extract import pick_proposer
+    commits = [{"id": "person:name:priya-raman", "login": None, "is_bot": False, "commits": 3}]
+    assert pick_proposer("person:im-Amrith", "im-Amrith", commits) == ("person:name:priya-raman", "priya-raman")
+    mixed = commits + [{"id": "person:im-Amrith", "login": "im-Amrith", "is_bot": False, "commits": 1}]
+    assert pick_proposer("person:im-Amrith", "im-Amrith", mixed) == ("person:im-Amrith", "im-Amrith")
+    bots = [{"id": "person:dependabot", "login": "dependabot", "is_bot": True, "commits": 2}]
+    assert pick_proposer("person:a", "a", bots) == ("person:a", "a")
+
+
+def test_doc_modules_prefers_named_folders_and_linked_prs_over_own_folder():
+    from lore.ingest.extract import doc_modules
+    mods = [{"id": f"module:s:{p}", "path": p} for p in ("api", "cache", "docs", "storage", "tests")]
+    adr1 = "Each of our 3 API replicas keeps its own LRU. Move the link cache into Redis."
+    assert doc_modules(adr1, "module:s:docs", [], mods) == ["module:s:api", "module:s:cache"]
+    adr2 = "Short codes are sequential (#2)."
+    assert doc_modules(adr2, "module:s:docs", ["module:s:api", "module:s:docs"], mods) == ["module:s:api"]
+    assert doc_modules("Links can expire.", "module:s:docs", [], mods) == ["module:s:docs"]
+
+
+def test_validate_drops_test_kind_and_weights_parity():
+    c = _cand(proposer="alice", proposer_id="person:alice")
+    text = "Match C here. Added test18."
+    raw = {"topics": [], "decisions": [
+        {"statement": "Match C", "kind": "parity", "rationale": "", "alternatives": [], "quote": "Match C here",
+         "affected_modules": [], "proposed_by": ["alice"], "approved_by": [], "confidence": 0.7, "topics": []},
+        {"statement": "Add test18", "kind": "test", "rationale": "", "alternatives": [], "quote": "Added test18",
+         "affected_modules": [], "proposed_by": [], "approved_by": [], "confidence": 0.9, "topics": []},
+    ]}
+    _, ds = validate(raw, c, text, [], "m")
+    assert [d["kind"] for d in ds] == ["parity"] and ds[0]["weight"] == 0.5 and ds[0]["proposed_by"] == ["alice"]

@@ -36,6 +36,7 @@ from lore.config import (
     EXTRACT_MIN_ISSUE_COMMENTS,
     EXTRACT_MIN_PR_BODY,
     EXTRACT_MUST_INCLUDE,
+    DECISION_KIND_WEIGHT,
     Topic,
     topics_for,
 )
@@ -44,6 +45,7 @@ from lore.llm import chat_json
 from lore.llm.chat import role_config
 
 MAX_DECISIONS = 3
+DECISION_KINDS = ["architecture", "behavior", "process", "parity", "test"]
 MAX_QUOTE_WORDS = 30
 UNVERIFIED_CONFIDENCE_CAP = 0.5
 MAX_COMMENTS = 25  # most recent human comments per candidate, oldest first
@@ -109,6 +111,60 @@ class Candidate:
     at: int | None = None  # when the decision took effect: merged / closed / doc updated
     status: str = "active"
     label: str = ""  # "PR #2349", "issue #12", "doc docs/adr/0001.md"
+    proposer: str | None = None  # handle offered as proposed_by (see pick_proposer)
+    proposer_id: str | None = None
+    committers: list[dict] = field(default_factory=list)
+
+
+def handle(person_id: str | None, login: str | None = None) -> str | None:
+    """A person's handle in prompts: the login, or the name slug for commit-only authors
+    (person:name:marta-silva -> marta-silva)."""
+    if login:
+        return login
+    if not person_id:
+        return None
+    return person_id.removeprefix("person:name:").removeprefix("person:")
+
+
+def pick_proposer(author_id: str | None, author: str | None, committers: list[dict]) -> tuple[str | None, str | None]:
+    """Who proposed a PR's decisions: its opener, unless the opener wrote none of its
+    commits, then the human with the most commits (sandbox PR #14 is opened by im-Amrith
+    but every commit is Priya's). committers come most-commits first."""
+    humans = [c for c in committers if c.get("id") and not c.get("is_bot")]
+    if not humans or any(c["id"] == author_id for c in humans):
+        return author_id, author
+    top = humans[0]
+    return top["id"], handle(top["id"], top.get("login"))
+
+
+# Folder names too generic to count as "the text mentions this module" when they appear as
+# a plain word (they still count as a path: "graph/", `src`).
+_GENERIC_FOLDERS = {"src", "lib", "doc", "docs", "test", "tests", "graph", "deps", "demo", "assets", "bench"}
+
+
+def mentioned_modules(text: str, modules: list[dict]) -> list[str]:
+    """Module ids whose path, or (for non-generic names) last folder name as a whole word,
+    appears in the text: "API replicas" -> api, "graph/src/parser" -> graph/src/parser."""
+    low = text.lower()
+    out = []
+    for m in modules:
+        path = (m["path"] or "").strip("/").lower()
+        if not path:
+            continue
+        name = path.rsplit("/", 1)[-1]
+        as_path = re.search(rf"(?<![\w/]){re.escape(path)}(?:/|`|\b)", low) and ("/" in path or f"{path}/" in low
+                                                                              or f"`{path}`" in low)
+        as_word = name not in _GENERIC_FOLDERS and re.search(rf"\b{re.escape(name)}\b", low)
+        if as_path or as_word:
+            out.append(m["id"])
+    return out
+
+
+def doc_modules(text: str, own: str | None, linked: list[str], repo_modules: list[dict]) -> list[str]:
+    """Choices for a doc's decisions: folders its text names, then modules of linked PRs,
+    never the doc's own folder unless nothing else is found (ADR 0002 -> api, not docs)."""
+    found = [m for m in dict.fromkeys(mentioned_modules(text, repo_modules) + linked) if m and m != own]
+    return found[:EXTRACT_MAX_MODULES] or ([own] if own else [])
 
 
 def rank_modules(modules: list[str], files: list[str] | None, cap: int = EXTRACT_MAX_MODULES) -> list[str]:
@@ -149,10 +205,13 @@ def pick_issues(issues: list[dict], body: str, cap: int = MAX_LINKED_ISSUES) -> 
     return sorted(uniq.values(), key=lambda i: (not i["closes"], pos(i), i["number"]))[:cap]
 
 
-def _row_to_candidate(r: dict, repo: str) -> Candidate:
+def _row_to_candidate(r: dict, repo: str, repo_modules: list[dict] | None = None) -> Candidate:
     kind = r["kind"]
     body = strip_bot_blocks(r["body"]) if kind != "doc" else (r["body"] or "")
+    proposer_id, proposer = r["author_id"], handle(r["author_id"], r["author"])
+    committers = [c for c in r.get("committers") or [] if c]
     if kind == "pr":
+        proposer_id, proposer = pick_proposer(r["author_id"], r["author"], committers)
         merged = r["merged_at"] is not None
         status, at = ("active", r["merged_at"]) if merged else ("proposed", None)
         label = f"PR #{r['number']}" + ("" if merged else " (draft)" if r["is_draft"] else f" ({r['state']})")
@@ -162,13 +221,14 @@ def _row_to_candidate(r: dict, repo: str) -> Candidate:
         modules = rank_modules(r["modules"] or [], None)
     else:
         status, at, label = "active", r["updated_at"], f"doc {r['path']}"
-        modules = rank_modules(r["modules"] or [], None)
+        modules = doc_modules(body, r["own_module"], r["linked_modules"] or [], repo_modules or [])
     comments = [c for c in r["comments"] if (c.get("body") or "").strip()]
     return Candidate(
         id=r["id"], kind=kind, url=r["url"], title=r["title"] or "", body=body,
         author=r["author"], author_id=r["author_id"], approvers=sorted(r["approvers"] or []),
         modules=modules, labels=r.get("labels") or [], comments=comments,
         issues=pick_issues(r.get("issues") or [], body), number=r.get("number"), at=at, status=status, label=label,
+        proposer=proposer, proposer_id=proposer_id, committers=committers,
     )
 
 
@@ -187,8 +247,9 @@ def load_candidates(graph: Graph, repo: str, all_prs: bool = False) -> list[Cand
     for r in ro_query(graph, "extract_issue_candidates", {"repo": repo, "min_comments": EXTRACT_MIN_ISSUE_COMMENTS}):
         if not r["author_is_bot"]:
             out.append(_row_to_candidate(r, repo))
+    repo_modules = ro_query(graph, "extract_repo_modules", {"repo": repo})
     for r in ro_query(graph, "extract_doc_candidates", {"repo": repo}):
-        out.append(_row_to_candidate(r, repo))
+        out.append(_row_to_candidate(r, repo, repo_modules))
     return out
 
 
@@ -220,12 +281,22 @@ A decision is a deliberate choice the team made about how the software works or 
 Record only what the text states.
 - statement: one sentence saying what was decided, specific to this repo.
 - rationale: the reasons the text gives, in your own words but nothing more. If the text says what was done but not why, use an empty string. Never add reasons from general knowledge (for example, do not write "because Rust is faster" unless the text says it).
-- alternatives: options the text says were considered or rejected, each with its stated reason if one is given. Empty list if the text names none.
+- kind: what sort of decision it is.
+  architecture: the structure of the system (data structures, components, storage layout, dependencies, build system).
+  behavior: how the product behaves (query semantics, command replies, defaults, errors), chosen on its own merits.
+  process: how the team works (CI, releases, branches, reviews, security gates).
+  parity: chosen to match another reference, such as the C engine, the openCypher spec or the TCK ("like C", "matches openCypher").
+  test: only adds or changes tests or test policy, with no change to the product.
+- alternatives: every option the text argues against, each with its stated reason if one is given. This includes options introduced by "rather than Y", "instead of Y", "why X and not Y", "Y was considered", "we didn't do Y because", "unlike Y". Empty list if the text names none.
 - affected_modules: only from the module ids listed with the item, and only the ones the decision is about, not every file touched. Empty list if none fit.
-- proposed_by: the item's author, if they made or proposed the decision; otherwise empty.
+- proposed_by: the listed proposer, if they made or proposed the decision; otherwise empty.
 - approved_by: only from the listed approving reviewers; empty if none are listed.
 - quote: an exact passage copied from the item's text, under {max_quote} words, that states the decision or its reason. Copy it verbatim; do not paraphrase or join separate sentences.
-- confidence: 0 to 1, how clearly the text states this as a decision. 0.9 or more: explicit ("we decided", "Decision:", an ADR, "instead of X we now Y because..."). 0.6 to 0.8: clearly described choice with some reasoning. Below 0.6: you are inferring.
+- confidence: 0 to 1, how clearly the text states the decision and its reason. Use the whole range:
+  0.9 to 1.0: the text states the choice AND its reason explicitly ("Decision: ...", an ADR, "we chose X because ...", "X rather than Y, because ...").
+  0.75 to 0.89: the choice is explicit, but the reason is only partly stated or must be pieced together.
+  0.6 to 0.74: the choice is clear from what changed, but the text gives no reason.
+  below 0.6: you are inferring that a deliberate choice was made at all.
 - topics: 1 to 3 topic ids per decision, from the list below only. Also give 1 to 3 "topics" for the item as a whole.
 
 Topics (id: what it covers; path and label hints):
@@ -258,14 +329,15 @@ def schema_for(c: Candidate, topic_ids: list[str]) -> dict:
             "statement": {"type": "string"},
             "rationale": {"type": "string"},
             "alternatives": {"type": "array", "items": {"type": "string"}},
+            "kind": {"type": "string", "enum": DECISION_KINDS},
             "affected_modules": _enum_array(c.modules),
-            "proposed_by": _enum_array([c.author] if c.author else []),
+            "proposed_by": _enum_array([c.proposer] if c.proposer else []),
             "approved_by": _enum_array(c.approvers),
             "quote": {"type": "string"},
             "confidence": {"type": "number"},
             "topics": _enum_array(topic_ids, max_items=3, min_items=1),
         },
-        "required": ["statement", "rationale", "alternatives", "affected_modules", "proposed_by",
+        "required": ["statement", "kind", "rationale", "alternatives", "affected_modules", "proposed_by",
                      "approved_by", "quote", "confidence", "topics"],
     }
     return {
@@ -284,8 +356,13 @@ def _day(ts: int | None) -> str:
 
 def source_text(c: Candidate) -> str:
     """The item as the LLM sees it. Also the text quotes are verified against."""
-    head = [f"Item: {c.label}" + (f" by {c.author}" if c.author else ""),
+    head = [f"Item: {c.label}" + (f" opened by {c.author}" if c.kind == "pr" and c.author
+                                    else f" by {c.author}" if c.author else ""),
             f"URL: {c.url}", f"Title: {c.title}"]
+    if c.committers:
+        head.append("Commits by: " + ", ".join(f"{handle(x['id'], x.get('login'))} ({x['commits']})"
+                                               for x in c.committers if x.get("id")))
+    head.append(f"Proposer (choose proposed_by from this): {c.proposer or 'none'}")
     if c.kind == "pr":
         head.append(f"Merged: {_day(c.at)}" if c.at else "Not merged (open or draft): a proposal")
     if c.labels:
@@ -349,14 +426,22 @@ def validate(raw: dict, c: Candidate, text: str, topic_ids: list[str], model: st
             quote = " ".join(words[:MAX_QUOTE_WORDS]) + " ..."
         match = quote_match(quote.removesuffix(" ..."), text)
         verified = match >= 0.8
+        kind = d.get("kind") if d.get("kind") in DECISION_KINDS else "behavior"
+        if kind == "test":
+            continue  # test-only additions are not decisions worth answering with
         llm_conf = max(0.0, min(1.0, float(d.get("confidence") or 0)))
+        modules = [m for m in dict.fromkeys(d.get("affected_modules") or []) if m in c.modules]
+        if c.kind == "doc" and not modules:
+            modules = list(c.modules)  # a doc's choices are already the folders it names
         out.append({
             "id": decision_id(c.id, statement),
             "statement": statement,
+            "kind": kind,
+            "weight": DECISION_KIND_WEIGHT[kind],
             "rationale": (d.get("rationale") or "").strip(),
             "alternatives": [a.strip() for a in d.get("alternatives") or [] if a and a.strip()],
-            "affected_modules": [m for m in dict.fromkeys(d.get("affected_modules") or []) if m in c.modules],
-            "proposed_by": [p for p in d.get("proposed_by") or [] if p == c.author][:1],
+            "affected_modules": modules,
+            "proposed_by": [p for p in d.get("proposed_by") or [] if p == c.proposer][:1],
             "approved_by": [p for p in dict.fromkeys(d.get("approved_by") or []) if p in c.approvers],
             "quote": quote,
             "quote_match": round(match, 2),
@@ -430,13 +515,13 @@ def load_extractions(graph: Graph, results: list[Extraction], org: str,
         c = r.candidate
         about += [{"src_id": c.id, "topic": t, "at": c.at} for t in r.topics]
         for d in r.decisions:
-            decisions.append({**{k: d[k] for k in ("id", "statement", "rationale", "alternatives", "status",
+            decisions.append({**{k: d[k] for k in ("id", "statement", "kind", "weight", "rationale", "alternatives", "status",
                                                    "valid_from", "confidence", "llm_confidence", "quote",
                                                    "quote_verified", "source_id", "source_url", "model")},
                               "extracted_at": now})
             affects += [{"decision_id": d["id"], "module_id": m, "at": c.at} for m in d["affected_modules"]]
-            if d["proposed_by"] and c.author_id:
-                proposed.append({"decision_id": d["id"], "person_id": c.author_id, "at": c.at})
+            if d["proposed_by"] and c.proposer_id:
+                proposed.append({"decision_id": d["id"], "person_id": c.proposer_id, "at": c.at})
             approved += [{"decision_id": d["id"], "person_id": f"person:{p}", "at": c.at} for p in d["approved_by"]]
             about += [{"src_id": d["id"], "topic": t, "at": c.at} for t in d["topics"]]
     for name, rows in (("load_decisions", decisions), ("load_affects", affects), ("load_proposed", proposed),

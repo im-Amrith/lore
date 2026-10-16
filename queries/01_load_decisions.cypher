@@ -3,10 +3,13 @@
 // (llm_confidence), capped at 0.5 when the quote couldn't be found in the source text.
 // status: 'active' for merged PRs, closed issues and docs; 'proposed' for open or draft PRs,
 // which aren't decided yet (sandbox PR #16 until the demo merges it).
+// kind: architecture | behavior | process | parity ("test" is dropped before loading);
+// weight ranks parity below the rest (DECISION_KIND_WEIGHT).
 // The source can have any of three labels; three indexed OPTIONAL MATCHes avoid a label-free scan.
 UNWIND $rows AS row
 MERGE (d:Decision {id: row.id})
-SET d.statement = row.statement, d.rationale = row.rationale, d.alternatives = row.alternatives,
+SET d.statement = row.statement, d.kind = row.kind, d.weight = row.weight,
+    d.rationale = row.rationale, d.alternatives = row.alternatives,
     d.status = row.status, d.valid_from = row.valid_from, d.valid_to = null,
     d.confidence = row.confidence, d.llm_confidence = row.llm_confidence,
     d.quote = row.quote, d.quote_verified = row.quote_verified,

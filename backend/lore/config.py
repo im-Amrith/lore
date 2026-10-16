@@ -57,6 +57,10 @@ EXTRACT_MAX_MODULES = 40  # affected-module choices offered to the LLM per candi
 EXTRACT_MUST_INCLUDE: dict[str, list[int]] = {"FalkorDB/FalkorDB": [2678, 2349, 2279, 2695]}
 # Decisions below this confidence stay in the graph but are excluded from answers.
 DECISION_MIN_CONFIDENCE = 0.6
+# Ranking weight per decision kind, stored as Decision.weight. "parity" choices (match C /
+# openCypher) are real reasons but say less about this project, so they rank lower.
+# "test" decisions are dropped at extraction and never loaded.
+DECISION_KIND_WEIGHT = {"architecture": 1.0, "behavior": 1.0, "process": 1.0, "parity": 0.5, "test": 0.0}
 
 # Free-tier pacing for the fast (Gemini) endpoint: minimum seconds between uncached calls,
 # and retries with exponential backoff on 429 / 5xx.

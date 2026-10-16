@@ -45,7 +45,7 @@ def render(results: list[Extraction]) -> str:
         for d in r.decisions:
             n += 1
             used = "" if d["confidence"] >= DECISION_MIN_CONFIDENCE else "   << below 0.6, excluded from answers"
-            out.append(f"\n  [{n}] {d['statement']}")
+            out.append(f"\n  [{n}] ({d['kind']}) {d['statement']}")
             out.append(f"      why:          {d['rationale'] or '(not stated)'}")
             out.append(f"      alternatives: {'; '.join(d['alternatives']) or '-'}")
             out.append(f"      modules:      {', '.join(m.split(':', 2)[2] for m in d['affected_modules']) or '-'}")
