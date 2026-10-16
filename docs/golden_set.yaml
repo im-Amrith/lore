@@ -185,13 +185,18 @@ questions:
     org: FalkorDB
     repo: FalkorDB
     expected: >
-      The planner and the runtime. About half of parser-touching commits also touch graph/src/planner (50%)
-      and graph/src/runtime (47%).
+      The runtime and the planner, in either order. About half of parser-touching commits also touch
+      graph/src/runtime and graph/src/planner. Lore measures runtime ~58% (26 of 45 commits) and
+      planner ~49% (22 of 45); the hand count gave planner 50%, runtime 47%.
     must_cite: []
     key_facts: ["planner", "runtime"]
-    expected_path: "Module graph/src/parser -> CO_CHANGED -> graph/src/planner, graph/src/runtime"
+    key_facts_any_order: true
+    expected_path: "Module graph/src/parser -> CO_CHANGED -> graph/src/runtime, graph/src/planner (either order)"
     checked_on: ""
-    notes: "Co-change counted on commits touching <= 6 engine modules. No single URL proves this; check the answer's numbers against Lore's own CO_CHANGED edges."
+    notes: >
+      Co-change counted on commits touching <= 6 engine modules. No single URL proves this; check the answer's
+      numbers against Lore's own CO_CHANGED edges. Accept planner and runtime as the top two in either order:
+      the hand count and Lore's derive job filter commits slightly differently, which swaps their rank.
     verify: "Optional: open 3 recent parser PRs and see if they touch planner or runtime."
 
 # Spare "why" candidates if any of q01-q04 don't check out:
