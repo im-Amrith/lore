@@ -89,9 +89,10 @@ uv run --directory backend python scripts/derive.py --org FalkorDB --report --al
 uv run --directory backend python scripts/extract.py --repo FalkorDB/FalkorDB --sample 30   # LLM decisions + topics, printed (--list: no LLM; --load: write; --all-prs: sandbox)
 uv run --directory backend python scripts/embed.py --org FalkorDB     # chunk docs, embed Decision/Issue/DocChunk, vector indexes
 uv run --directory backend python scripts/find.py --org FalkorDB "Why ...?"   # query 2 entry points (--issue "title": query 9; --check: M6 golden checks)
-uv run --directory backend python -m lore.mcp_server            # lore-mcp tool server over stdio (ten tools)
+uv run --directory backend python -m lore.mcp_server            # lore-mcp tool server over stdio (ten tools + data_version)
 uv run --directory backend python scripts/ask.py --org FalkorDB --user amrith "Who owns the query planner?"   # Navigator: answer, path, Cypher (--no-remember, --brief, --json)
-uv run --directory backend python scripts/eval.py               # golden set q01-q10 + s01-s03 + n01 -> docs/eval_results.md (--only q05 q08)
+uv run --directory backend python scripts/eval.py               # golden set: reruns only questions not yet passed -> docs/eval_results.md (--only q06,q07; --all; --pause 5; --no-cache)
+uv run --directory backend python scripts/warm.py               # pre-answer the demo questions into the answer cache (--check: report only, no LLM)
 # add: serve command as it is created
 ```
 
@@ -124,6 +125,7 @@ uv run --directory backend python scripts/eval.py               # golden set q01
 
 **Safety**
 - `post_triage` and any GitHub write may only target the repo in `SANDBOX_REPO`, enforced in code with an allowlist check, and only after an explicit approval from the UI.
+- LLM keys must be free-tier keys. Never call a billing-enabled key (even one with a spend cap). The agents' model pool is `AGENT_LLM_POOL` in `config.py`.
 - Secrets only in `.env` (gitignored). Never commit, print or log tokens or keys. Keep `.env.example` in sync with every new variable.
 - Rate-limit public endpoints that call the LLM.
 

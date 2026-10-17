@@ -1,4 +1,4 @@
-"""lore-mcp: the ten Lore tools over MCP (Python MCP SDK 2.x, MCPServer).
+"""lore-mcp: the Lore tools over MCP (ten from docs/PLAN.md, plus data_version) (Python MCP SDK 2.x, MCPServer).
 
 Run over stdio:  uv run --directory backend python -m lore.mcp_server
 Each tool is a thin wrapper over lore.mcp_server.tools; see that module for the envelope
@@ -116,6 +116,13 @@ def remember(org: str, user_id: str, question: str, answer: str, cited_ids: list
     """Store a question and its answer in the user's memory, with CITED edges to the node ids the
     answer used. Returns the session id to reuse for follow-up questions."""
     return t.remember(org, user_id, question, answer, cited_ids, cypher, intent, session_id)
+
+
+@mcp.tool(annotations=READ)
+def data_version(org: str) -> dict[str, Any]:
+    """A short fingerprint of the org graph's knowledge (counts and latest timestamps; memory
+    excluded). It changes after a load, sync or derive, so a cached answer is valid while it holds."""
+    return t.data_version(org)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False,

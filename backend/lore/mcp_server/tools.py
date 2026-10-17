@@ -1,4 +1,4 @@
-"""The ten lore-mcp tools as plain functions (server.py registers them with MCP).
+"""The lore-mcp tools as plain functions (server.py registers them with MCP).
 
 Every tool takes `org` (FalkorDB, im-Amrith, ...) which selects the graph lore_<org>, runs only
 named queries from queries/, and returns the same envelope:
@@ -18,6 +18,8 @@ filters them). Decisions are always split by status: `decisions` (active, curren
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
 import time
@@ -573,6 +575,16 @@ def remember(org: str, user_id: str, question: str, answer: str, cited_ids: list
         run.edge(aid, "CITED", k)
     return run.result({"user_id": user_id, "session_id": session_id, "question_id": qid, "answer_id": aid,
                        "cited": cited, "cited_requested": len(set(cited_ids or []))})
+
+
+# ---------------------------------------------------------------- 11. data_version
+
+def data_version(org: str) -> dict[str, Any]:
+    """Query 93: a short fingerprint of the org graph's knowledge (memory excluded), for answer caches."""
+    run = Run("data_version", org)
+    row = run.ro("data_version", {})[0]
+    blob = json.dumps(row, sort_keys=True, default=str)
+    return run.result({"version": hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16], "counts": row})
 
 
 # ---------------------------------------------------------------- 10. post_triage (dry run)

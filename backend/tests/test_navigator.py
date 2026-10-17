@@ -78,7 +78,8 @@ def _run(question, fake, monkeypatch, **kw):
 
     async def go():
         async with Client(mcp) as client:
-            return await nav.ask(question, "im-Amrith", "tester", client, remember=False, **kw)
+            return await nav.ask(question, "im-Amrith", "tester", client, remember=False,
+                                 **{"use_cache": False, **kw})
     return anyio.run(go)
 
 
@@ -91,8 +92,7 @@ def test_answer_keeps_only_cites_a_tool_returned(monkeypatch):
     fake = FakeLLM([
         {"content": "", "tool_calls": [_call(1, "trace_decision", {"node_id": "pr:im-Amrith/lore-sandbox#11",
                                                                    "org": "SomeoneElse"})]},
-        {"content": "done", "tool_calls": []},
-        {"content": json.dumps(answer), "tool_calls": []},
+        {"content": json.dumps(answer), "tool_calls": []},  # call 2 writes the answer: no "done" turn
     ])
     r = _run("Why do we cache links in Redis?", fake, monkeypatch)
     assert [c["tool"] for c in r["tool_calls"]] == ["find_entities", "trace_decision"]
@@ -103,6 +103,7 @@ def test_answer_keeps_only_cites_a_tool_returned(monkeypatch):
     assert r["citations"][0]["url"] == "https://github.com/im-Amrith/lore-sandbox/pull/11"
     assert "remember" not in {t["function"]["name"] for t in fake.seen[0]["tools"]}
     assert fake.seen[-1]["json_schema"] is nav.ANSWER_SCHEMA and fake.seen[-1]["tools"] is None
+    assert len(fake.seen) == 2 and len(r["llm_calls"]) == 2
 
 
 @needs_sandbox
@@ -113,7 +114,45 @@ def test_tool_budget_and_recall_user_are_enforced(monkeypatch):
         {"content": json.dumps({"intent": "changed", "found": False, "not_found": "nothing asked yet",
                                 "sentences": []}), "tool_calls": []},
     ])
+    # recall comes back empty (thin) for a user with no history, but the budget is spent: no third call.
     r = _run("What changed since I last asked?", fake, monkeypatch)
+    assert len(fake.seen) == 2
     assert len(r["tool_calls"]) == NAVIGATOR_MAX_TOOL_CALLS
     assert all(c["args"]["user_id"] == "tester" for c in r["tool_calls"][1:])
     assert r["found"] is False and r["answer"].startswith("Not found: nothing asked yet.")
+
+
+ANSWER = {"content": json.dumps({"intent": "why", "found": True, "not_found": "", "sentences": [
+    {"text": "Links are cached in Redis.", "cites": ["decision:3dd18586343e603b"]}]}), "tool_calls": []}
+
+
+@needs_sandbox
+def test_thin_results_get_one_more_pick_then_the_answer(monkeypatch):
+    fake = FakeLLM([
+        {"content": "", "tool_calls": [_call(1, "trace_decision", {"node_id": "pr:im-Amrith/lore-sandbox#999"})]},
+        {"content": "", "tool_calls": [_call(2, "trace_decision", {"node_id": "pr:im-Amrith/lore-sandbox#11"})]},
+        ANSWER,
+    ])
+    r = _run("Why do we cache links in Redis?", fake, monkeypatch)
+    assert [c["tool"] for c in r["tool_calls"]] == ["find_entities", "trace_decision", "trace_decision"]
+    assert len(fake.seen) == 3 and r["found"]
+
+
+@needs_sandbox
+def test_answer_cache_hit_skips_the_llm(monkeypatch, tmp_path):
+    monkeypatch.setattr(nav, "ANSWER_CACHE_DIR", tmp_path)
+    fake = FakeLLM([{"content": "", "tool_calls": []}, ANSWER])
+    first = _run("Why do we cache links in Redis?", fake, monkeypatch, use_cache=True)
+    again = _run("  why do we CACHE links in redis ", fake, monkeypatch, use_cache=True)  # same normalized question
+    assert not first.get("answer_cache") and again["answer_cache"] and again["answer"] == first["answer"]
+    assert len(fake.seen) == 2  # the second ask made no LLM call
+    bypass = FakeLLM([{"content": "", "tool_calls": []}, ANSWER])
+    _run("Why do we cache links in Redis?", bypass, monkeypatch, use_cache=False)
+    assert len(bypass.seen) == 2  # --no-cache goes to the LLM
+
+
+def test_normalize_question_and_thin():
+    assert nav.normalize_question("  Who OWNS   analytics?? ") == "who owns analytics"
+    assert nav._thin({"error": "x"}) and nav._thin({"found": False, "decisions": []})
+    assert nav._thin({"message": "not found: no module named 'x'", "module": None})
+    assert not nav._thin({"experts": [{"id": "person:x"}]})

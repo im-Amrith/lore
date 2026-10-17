@@ -17,7 +17,7 @@ from lore.config import get_settings, graph_name
 
 BACKEND = Path(__file__).resolve().parent.parent
 TOOLS = {"find_entities", "trace_decision", "find_experts", "module_owners", "knowledge_risk",
-         "related_work", "impact_radius", "recall", "remember", "post_triage"}
+         "related_work", "impact_radius", "recall", "remember", "post_triage", "data_version"}
 
 
 def _graphs() -> list[str]:

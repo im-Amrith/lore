@@ -101,6 +101,28 @@ TRACE_MAX_ISSUES = 6
 RISK_MAX_MODULES = 30
 RISK_BRIDGE_PEOPLE = 5
 
+# Agent LLM pool (Navigator, Steward), tried in this order, quality first:
+#   (provider, env var holding the key, model, supports a strict json_schema response)
+# provider -> base URL: gemini = LLM_FAST_BASE_URL, groq = LLM_SMART_BASE_URL.
+# A per-minute 429 cools an endpoint down for its retry-after; a daily-quota or spend-cap error
+# marks it exhausted until its reset (llm/agent.py). Free-tier keys only: never put a
+# billing-enabled key in these env vars (a spend-cap error is logged as a misconfiguration).
+AGENT_LLM_POOL: list[tuple[str, str, str, bool]] = [
+    ("gemini", "LLM_FAST_API_KEY", "gemini-3.8-flash", True),
+    ("groq", "LLM_SMART_API_KEY", "openai/gpt-oss-120b", True),
+    ("gemini", "LLM_FAST_API_KEY", "gemini-3.6-flash", True),
+    ("groq", "LLM_SMART_API_KEY", "llama-3.3-70b-versatile", False),  # json_object + schema in the prompt
+    ("gemini", "LLM_FAST_API_KEY", "gemini-3.5-flash-lite", True),
+]
+AGENT_LLM_STATE = LLM_CACHE_DIR / "endpoint_state.json"  # cooldowns and exhausted endpoints, shared by runs
+AGENT_COOLDOWN_DEFAULT = 60  # seconds, when a per-minute 429 gives no retry-after
+AGENT_WAIT_MAX = 65  # seconds worth waiting for the soonest cooldown when every endpoint is cooling down
+GEMINI_DAILY_RESET_UTC_HOUR = 8  # free-tier daily quotas reset at midnight Pacific (07:00 or 08:00 UTC)
+
+# Navigator answer cache: data/cache/answers/<key>.json, key = normalized question + org +
+# graph data version (query 93) + a hash of the Navigator's prompts.
+ANSWER_CACHE_DIR = CACHE_DIR / "answers"
+
 # Navigator (M9): tool calls per question, find_entities included (remember, step 7, is not counted).
 NAVIGATOR_MAX_TOOL_CALLS = 4
 
@@ -175,8 +197,6 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dim: int = 384
     llm_daily_call_cap: int = 2000
-    # The agents' primary model, on the fast (Gemini) endpoint; Groq (LLM_SMART_*) is the fallback.
-    llm_agent_model: str = "gemini-3.8-flash"
 
     github_webhook_secret: str = ""
     # Signs triage approvals: the UI mints a token for (issue, exact draft) when a human clicks

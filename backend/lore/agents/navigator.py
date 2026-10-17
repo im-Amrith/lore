@@ -3,10 +3,13 @@
 The 7-step loop (docs/PLAN.md "Navigator's loop"):
   1. classify the intent (keyword rules: cheap, repeatable, and only a hint to the LLM)
   2. resolve names to node ids: find_entities is always the first tool call
-  3. the LLM picks the tool for the intent from the tools lore-mcp lists (MCP tool selection)
-  4. it may expand with more tools, up to NAVIGATOR_MAX_TOOL_CALLS in total (find_entities included)
-  5. it writes the answer as JSON sentences, each citing node ids; ids that no tool returned are
-     dropped, and a sentence left with no valid id is never shown
+  3. LLM call 1 picks the tools for the intent from the tools lore-mcp lists (MCP tool
+     selection), several at once if it needs them; they all run
+  4. only if every result came back empty does call 2 pick again (thin results); the budget is
+     NAVIGATOR_MAX_TOOL_CALLS tool calls in total, find_entities included
+  5. the next call writes the answer as JSON sentences, each citing node ids; ids that no tool
+     returned are dropped, and a sentence left with no valid id is never shown
+So a question usually costs two LLM calls, three when the first tools find nothing.
   6. return the answer, the subgraph (node and edge ids) and the Cypher every tool ran
   7. store the question, answer and CITED edges with the remember tool
 
@@ -15,11 +18,16 @@ answer depends on is a call the server logged. Tests may pass an in-process Clie
 `org` and `user_id` are hidden from the LLM and filled in by code, so a question can't read
 another org's graph or another user's memory. trace_decision also gets the user's question,
 verbatim, to rank the issues linked to a decision.
+
+Answer cache: an answer is stored under the normalized question + org + the graph's data
+version (the data_version tool, query 93) + a hash of the prompts and caps below, and reused
+while all four hold. A hit still goes through remember, so memory sees every question.
 """
 
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
@@ -31,7 +39,7 @@ import anyio
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
-from lore.config import BACKEND_DIR, NAVIGATOR_MAX_TOOL_CALLS
+from lore.config import ANSWER_CACHE_DIR, BACKEND_DIR, NAVIGATOR_MAX_TOOL_CALLS
 from lore.llm.agent import agent_chat, flatten
 
 # Tools the LLM may choose. remember (step 7) is called by code; post_triage belongs to Steward.
@@ -41,6 +49,7 @@ HIDDEN_ARGS = ("org", "user_id", "question")  # question: trace_decision ranks l
 
 # Step 1. Checked in order; the first rule with a matching phrase wins.
 INTENT_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("triage", ("new issue", "related to this issue", "related past work", "this bug report")),
     ("changed", ("what changed", "since i last", "since last time", "what did i ask")),
     ("impact", ("what else", "impact", "if we change", "if i change", "break if", "ripple")),
     ("risk", ("single person", "one person", "bus factor", "depend on", "knowledge risk", "who would we lose")),
@@ -51,7 +60,7 @@ INTENT_RULES: list[tuple[str, tuple[str, ...]]] = [
 ]
 INTENT_TOOL = {"why": "trace_decision", "who-knows": "find_experts", "owns": "module_owners",
                "risk": "knowledge_risk", "impact": "impact_radius", "changed": "recall",
-               "onboarding": "find_experts", "general": "trace_decision"}
+               "onboarding": "find_experts", "general": "trace_decision", "triage": "related_work"}
 
 SYSTEM = """You are Lore's Navigator. You answer questions about the history of the {org} GitHub org
 using only lore-mcp tool results. The org and the user id are filled in for you; never pass them.
@@ -62,10 +71,12 @@ How to work:
   why: trace_decision with the best matching decision id, or the PR / issue it was decided in.
   who-knows: find_experts with a module path (e.g. graph/src/index) or a topic name.
   owns: module_owners (it also lists the active experts). risk: knowledge_risk.
-  impact: impact_radius. What changed / my past questions: recall.
-- If the result doesn't answer the question, you may call another tool. At most {left} more tool calls.
-- When the results are enough (or nothing more can help), stop calling tools and reply: done.
-  The answer is written in the next step; it must cite ids from the results, so fetch the
+  impact: impact_radius. triage (a new issue's text): related_work with that text.
+  What changed / my past questions: recall.
+- Call every tool the answer needs NOW, in this one turn: you may call several at once (at
+  most {left}). You get another turn only if all of them come back empty. If find_entities
+  already answers the question, call nothing.
+- The answer is written in the next step and must cite ids from the results, so fetch the
   evidence it needs (experts' PRs, the decision's sources) rather than guessing.
 - Tool results use short field names: stmt = decision statement, why = rationale, src = where
   it was decided, prs = evidence PRs, ids = person ids."""
@@ -298,19 +309,74 @@ def _nearest(ev: _Evidence) -> list[dict[str, Any]]:
     return out
 
 
+def normalize_question(question: str) -> str:
+    """Case, spacing and trailing punctuation don't make a different question."""
+    return re.sub(r"\s+", " ", question.strip().lower()).rstrip(" ?.!")
+
+
+# Any change to what the LLM is told or shown makes cached answers stale.
+PROMPT_VERSION = hashlib.sha256(json.dumps(
+    [SYSTEM, ANSWER_RULES, COMPOSE, ANSWER_SCHEMA, sorted(DROP_KEYS), RENAME, LIST_CAPS, NESTED_LIST_CAPS,
+     STR_CAPS, MAX_STR, NAVIGATOR_MAX_TOOL_CALLS], sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
+
+
+def _cache_path(question: str, org: str, data_version: str):
+    key = hashlib.sha256(json.dumps([normalize_question(question), org.lower(), data_version, PROMPT_VERSION])
+                         .encode("utf-8")).hexdigest()
+    return ANSWER_CACHE_DIR / key[:2] / f"{key}.json"
+
+
+def _thin(result: dict[str, Any]) -> bool:
+    """A tool result with nothing to answer from: an error, a not-found, or no data at all."""
+    if not result or "error" in result or result.get("found") is False:
+        return True
+    if str(result.get("message", "")).startswith("not found"):
+        return True
+    return not any(isinstance(v, (list, dict)) and v for v in result.values())
+
+
+async def _remember(client: Client, out: dict[str, Any], session_id: str | None) -> None:
+    """Step 7, through MCP like every other graph access."""
+    r = await client.call_tool("remember", {
+        "org": out["org"], "user_id": out["user"], "question": out["question"], "answer": out["answer"],
+        "cited_ids": [c["id"] for c in out["citations"]],
+        "cypher": "\n\n".join(f"// {c['query']}\n{c['cypher']}" for c in out["cypher"]),
+        "intent": out["intent"], **({"session_id": session_id} if session_id else {})})
+    if not r.is_error and r.structured_content:
+        res = r.structured_content["results"]
+        out["session_id"] = res["session_id"]
+        out["memory"] = {k: res[k] for k in ("question_id", "answer_id", "cited")}
+
+
 async def ask(question: str, org: str, user: str, client: Client, *, session_id: str | None = None,
               remember: bool = True, use_cache: bool = True, verbose: bool = False) -> dict[str, Any]:
     started = time.monotonic()
+    log = print if verbose else (lambda *a, **k: None)
+
+    # The answer cache, keyed on the graph's current data version.
+    cache_file = None
+    if use_cache:
+        dv = await client.call_tool("data_version", {"org": org})
+        if not dv.is_error and dv.structured_content:
+            cache_file = _cache_path(question, org, dv.structured_content["results"]["version"])
+            if cache_file.exists():
+                out = {**json.loads(cache_file.read_text(encoding="utf-8")), "user": user,
+                       "question": question, "session_id": session_id, "answer_cache": True}
+                log(f"  [answer cache] hit {cache_file.name[:12]}")
+                if remember:
+                    await _remember(client, out, session_id)
+                out["seconds"] = round(time.monotonic() - started, 1)
+                return out
+
     intent = classify_intent(question)
     tools = llm_tools(await client.list_tools())
     llm_calls: list[dict[str, Any]] = []
 
     def chat(*args: Any, **kwargs: Any) -> dict[str, Any]:
         r = agent_chat(*args, **kwargs)
-        llm_calls.append({k: r.get(k) for k in ("model", "prompt_tokens", "seconds", "cached")})
+        llm_calls.append({k: r.get(k) for k in ("model", "endpoint", "prompt_tokens", "seconds", "cached")})
         return r
     ev = _Evidence()
-    log = print if verbose else (lambda *a, **k: None)
 
     # Step 2: resolve names. Shown to the LLM as its own first tool call.
     args = {"text": question}
@@ -326,16 +392,13 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         {"role": "tool", "tool_call_id": "call_0", "content": json.dumps(first, default=str)},
     ]
 
-    # Steps 3-4: the LLM picks tools until it stops asking or the budget is spent.
-    model = ""
-    while used < NAVIGATOR_MAX_TOOL_CALLS:
-        reply = chat(messages, tools, use_cache=use_cache)
-        model = reply["model"]
-        if not reply["tool_calls"]:
-            break
+    async def run_calls(reply: dict[str, Any]) -> list[dict[str, Any]]:
+        """Run every tool the LLM picked in one turn (within the budget); return their results."""
+        nonlocal used
         messages.append({"role": "assistant", "content": reply["content"], "tool_calls": [
             {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": tc["arguments"]}}
             for tc in reply["tool_calls"]]})
+        results = []
         for tc in reply["tool_calls"]:
             if used >= NAVIGATOR_MAX_TOOL_CALLS:
                 result: dict[str, Any] = {"error": f"skipped: at most {NAVIGATOR_MAX_TOOL_CALLS} tool calls per question"}
@@ -355,7 +418,23 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
                     used += 1
                     log(f"  [tool {used}] {tc['name']} {targs}")
                     result = await _call(client, ev, tc["name"], full)
+            results.append(result)
             messages.append({"role": "tool", "tool_call_id": tc["id"], "content": json.dumps(result, default=str)})
+        return results
+
+    # Step 3: call 1 picks every tool it needs, in one turn.
+    model = ""
+    reply = chat(messages, tools, use_cache=use_cache)
+    model = reply["model"]
+    if reply["tool_calls"]:
+        results = await run_calls(reply)
+        # Step 4: one more pick only when everything came back empty.
+        if all(_thin(r) for r in results) and used < NAVIGATOR_MAX_TOOL_CALLS:
+            messages.append({"role": "user", "content": "Those results are empty. Try other tools or arguments "
+                                                        f"(at most {NAVIGATOR_MAX_TOOL_CALLS - used} calls), or call nothing."})
+            reply = chat(messages, tools, use_cache=use_cache)
+            if reply["tool_calls"]:
+                await run_calls(reply)
 
     # Step 5: compose from the tool results (no tools offered), then keep only cites a tool returned.
     compose = [{"role": "system", "content": COMPOSE}, *flatten(messages[1:])]
@@ -399,16 +478,13 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         "llm_calls": llm_calls, "session_id": session_id,
     }
 
-    # Step 7: memory, through MCP like every other graph access.
+    if cache_file is not None:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps(out, default=str), encoding="utf-8")
+
+    # Step 7: memory.
     if remember:
-        r = await client.call_tool("remember", {
-            "org": org, "user_id": user, "question": question, "answer": text, "cited_ids": cited,
-            "cypher": "\n\n".join(f"// {c['query']}\n{c['cypher']}" for c in ev.cypher),
-            "intent": out["intent"], **({"session_id": session_id} if session_id else {})})
-        if not r.is_error and r.structured_content:
-            res = r.structured_content["results"]
-            out["session_id"] = res["session_id"]
-            out["memory"] = {k: res[k] for k in ("question_id", "answer_id", "cited")}
+        await _remember(client, out, session_id)
     out["seconds"] = round(time.monotonic() - started, 1)
     return out
 

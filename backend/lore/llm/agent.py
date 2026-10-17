@@ -1,70 +1,128 @@
-"""Tool-calling chat for the agents: Gemini (LLM_AGENT_MODEL on the fast endpoint) first, Groq
-(role "smart") as the fallback.
+"""Tool-calling chat for the agents over a pool of free-tier endpoints (AGENT_LLM_POOL in config).
 
-    agent_chat(messages, tools, tool_choice) -> {"content", "tool_calls": [{id, name, arguments}],
-                                                 "model", "prompt_tokens", "seconds"}
+    agent_chat(messages, tools, tool_choice, json_schema)
+      -> {"content", "tool_calls": [{id, name, arguments}], "model", "endpoint", "prompt_tokens", "seconds"}
 
-Why Gemini first: Groq's free tier allows 8,000 tokens a minute and one question needs two or
-three calls of 2-4K tokens, so Groq stalls a live demo on 429s. On a 429, a 5xx, a timeout, an
-empty answer or a failed tool call (Groq answers 400 "tool_use_failed" when the model writes a
-malformed call), the request is retried once, then sent to the next endpoint; a 413 (request
-too large) goes straight to the next one. Responses are cached on disk keyed by model + messages
-+ tools, so re-running the eval replays the same answers for free; a changed tool result
-changes the messages and misses the cache. Uncached requests count against LLM_DAILY_CALL_CAP
-(kind "agent").
+Endpoints are tried in pool order (quality first). An endpoint is never hammered:
+  - a per-minute 429 puts it on cooldown for the retry-after time (or AGENT_COOLDOWN_DEFAULT),
+  - a daily-quota error marks it exhausted until its reset (the retry hint, else the next
+    Gemini reset at GEMINI_DAILY_RESET_UTC_HOUR, else an hour),
+  - a spend-cap / billing error marks it exhausted for the day and is logged loudly: it means a
+    billing-enabled key is configured, which must never happen,
+  - a 5xx or timeout cools it down briefly; any other API error (a 400 for an unsupported
+    option, a 413, an empty answer, Groq's tool_use_failed) moves on without a cooldown.
+Then the next endpoint gets the request. The state lives in AGENT_LLM_STATE, so the eval,
+warm.py and the API share it. If every endpoint is cooling down and the soonest is back within
+AGENT_WAIT_MAX seconds, the call waits for it once; otherwise it fails with the states.
+
+Responses are cached on disk keyed by model + messages + tools; a cached reply from any pool
+model is reused. Uncached requests count against LLM_DAILY_CALL_CAP (kind "agent").
 
 Gemini 3 rejects replayed tool calls that lack its own thought_signature, so for Gemini the
-earlier tool calls and results are sent as plain text turns (flatten).
+earlier tool calls and results are sent as plain text turns (flatten). Endpoints without strict
+json_schema support get json_object mode plus the schema in the prompt.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import threading
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import openai
 
-from lore.config import get_settings
+from lore.config import (
+    AGENT_COOLDOWN_DEFAULT,
+    AGENT_LLM_POOL,
+    AGENT_LLM_STATE,
+    AGENT_WAIT_MAX,
+    GEMINI_DAILY_RESET_UTC_HOUR,
+    get_settings,
+)
 from lore.llm.cache import cache_get, cache_key, cache_put, count_call
-from lore.llm.chat import LLMError, _client, _retry_after, role_config
+from lore.llm.chat import LLMError, _client, _retry_after
 
-RETRY_WAIT_MAX = 60.0  # seconds to wait on a 429 before the one retry; longer = a daily limit
-
-
-def _endpoints() -> list[tuple[str, str, str, str]]:
-    """(label, base_url, api_key, model) in the order they are tried."""
-    s = get_settings()
-    out = []
-    if s.llm_fast_api_key and s.llm_agent_model:
-        out.append(("gemini", s.llm_fast_base_url, s.llm_fast_api_key, s.llm_agent_model))
-    if s.llm_smart_api_key and s.llm_smart_model:
-        out.append(("groq", *role_config("smart")))
-    if not out:
-        raise LLMError("no agent LLM configured: set LLM_FAST_API_KEY (+ LLM_AGENT_MODEL) or LLM_SMART_*")
-    return out
-
-
-def _wait_hint(e: Exception) -> float | None:
-    """Groq puts the wait in the message: 'Please try again in 13.2s' (or '1m5.3s')."""
-    m = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", str(e))
-    return (int(m.group(1) or 0) * 60 + float(m.group(2))) if m else None
+ERROR_COOLDOWN = 30  # seconds after a 5xx or timeout
+_lock = threading.Lock()
 
 
 class EmptyReply(RuntimeError):
     pass
 
 
-def _retryable(e: Exception) -> bool:
-    if isinstance(e, EmptyReply):
-        return True
-    if isinstance(e, (openai.RateLimitError, openai.InternalServerError, openai.APITimeoutError,
-                      openai.APIConnectionError)):
-        return True
-    # Groq: 400 with code tool_use_failed when the model's tool call doesn't parse.
-    return isinstance(e, openai.BadRequestError) and "tool" in str(e).lower()
+# ---------------------------------------------------------------- the pool and its state
 
+def pool() -> list[dict[str, Any]]:
+    """Configured endpoints, in order; entries whose key env var is empty are left out."""
+    s = get_settings()
+    base = {"gemini": s.llm_fast_base_url, "groq": s.llm_smart_base_url}
+    out = []
+    for provider, key_var, model, schema in AGENT_LLM_POOL:
+        key = getattr(s, key_var.lower(), "")
+        if key:
+            out.append({"label": f"{provider}:{model}", "provider": provider, "base_url": base[provider],
+                        "api_key": key, "model": model, "schema": schema})
+    if not out:
+        raise LLMError("no agent LLM configured: set LLM_FAST_API_KEY and/or LLM_SMART_API_KEY")
+    return out
+
+
+def load_state() -> dict[str, dict[str, Any]]:
+    try:
+        return json.loads(AGENT_LLM_STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _mark(label: str, until: float, reason: str, detail: str) -> None:
+    with _lock:
+        state = load_state()
+        state[label] = {"until": int(until), "reason": reason, "detail": detail[:200],
+                        "until_utc": f"{datetime.fromtimestamp(until, timezone.utc):%Y-%m-%d %H:%M}"}
+        AGENT_LLM_STATE.parent.mkdir(parents=True, exist_ok=True)
+        AGENT_LLM_STATE.write_text(json.dumps(state, indent=1), encoding="utf-8")
+
+
+def _wait_hint(e: Exception) -> float | None:
+    """Retry hints inside error text: Groq 'try again in 1m5.3s', Gemini 'retryDelay': '41s'."""
+    msg = str(e)
+    if m := re.search(r"try again in (?:(\d+)h)?(?:(\d+)m)?([\d.]+)s", msg):
+        return int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + float(m.group(3))
+    if m := re.search(r"retryDelay['\"]?\s*[:=]\s*['\"]?([\d.]+)s", msg):
+        return float(m.group(1))
+    return None
+
+
+def _next_gemini_reset(now: float) -> float:
+    t = datetime.fromtimestamp(now, timezone.utc).replace(hour=GEMINI_DAILY_RESET_UTC_HOUR, minute=0,
+                                                          second=0, microsecond=0)
+    if t.timestamp() <= now:
+        t += timedelta(days=1)
+    return t.timestamp()
+
+
+def classify(e: Exception, provider: str, now: float) -> tuple[str, float | None]:
+    """(reason, cooled-down-until or None). reason: spend, daily, minute, error or other."""
+    msg, status = str(e), getattr(e, "status_code", None)
+    # Not "billing": Gemini's ordinary free-tier 429 says "check your plan and billing details".
+    if status == 402 or (status in (403, 429) and re.search(r"spend|budget|prepay", msg, re.I)):
+        return "spend", _next_gemini_reset(now)
+    if status == 429:
+        hint = _retry_after(e) or _wait_hint(e)
+        if re.search(r"per ?day|\(TPD\)|\(RPD\)|daily", msg, re.I):
+            if hint and hint > 120:
+                return "daily", now + hint
+            return "daily", _next_gemini_reset(now) if provider == "gemini" else now + 3600
+        return "minute", now + (hint or AGENT_COOLDOWN_DEFAULT)
+    if isinstance(e, (openai.InternalServerError, openai.APITimeoutError, openai.APIConnectionError)):
+        return "error", now + ERROR_COOLDOWN
+    return "other", None
+
+
+# ---------------------------------------------------------------- calls
 
 def flatten(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Tool-call history -> text turns, for endpoints that can't replay foreign tool calls."""
@@ -96,46 +154,72 @@ def _message(resp: Any) -> dict[str, Any]:
             "prompt_tokens": getattr(usage, "prompt_tokens", None)}
 
 
+def _kwargs(ep: dict[str, Any], messages: list[dict[str, Any]], tools: list | None, tool_choice: Any,
+            json_schema: dict | None) -> dict[str, Any]:
+    msgs = flatten(messages) if ep["provider"] == "gemini" else list(messages)
+    kw: dict[str, Any] = {"model": ep["model"], "temperature": 0}
+    if tools:
+        kw.update(tools=tools, tool_choice=tool_choice)
+    if json_schema and ep["schema"]:
+        kw["response_format"] = {"type": "json_schema",
+                                 "json_schema": {"name": "answer", "schema": json_schema, "strict": True}}
+    elif json_schema:
+        kw["response_format"] = {"type": "json_object"}
+        msgs.append({"role": "user", "content": "Reply with one JSON object that matches this JSON schema: "
+                                                + json.dumps(json_schema)})
+    if ep["provider"] == "gemini":  # Gemini 3 thinks at length by default (77 s for "say hi")
+        kw["reasoning_effort"] = "low"
+    kw["messages"] = msgs
+    return kw
+
+
 def agent_chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
                tool_choice: str | dict = "auto", json_schema: dict | None = None,
                use_cache: bool = True) -> dict[str, Any]:
+    endpoints = pool()
+    req = json.dumps({"tools": tools, "tool_choice": tool_choice, "schema": json_schema}, sort_keys=True)
+    keys = {ep["label"]: cache_key(ep["model"], req, messages) for ep in endpoints}
+    if use_cache:
+        for ep in endpoints:
+            if (hit := cache_get("agent", keys[ep["label"]])) is not None:
+                return {**hit, "endpoint": hit.get("endpoint", ep["label"]), "cached": True}
+
     last_err: Exception | None = None
-    for label, base_url, api_key, model in _endpoints():
-        key = cache_key(model, json.dumps({"tools": tools, "tool_choice": tool_choice, "schema": json_schema},
-                                          sort_keys=True), messages)
-        if use_cache and (hit := cache_get("agent", key)) is not None:
-            return {**hit, "cached": True}
-        kwargs: dict[str, Any] = {"model": model, "temperature": 0,
-                                  "messages": flatten(messages) if label == "gemini" else messages}
-        if tools:
-            kwargs.update(tools=tools, tool_choice=tool_choice)
-        if json_schema:
-            kwargs["response_format"] = {"type": "json_schema",
-                                         "json_schema": {"name": "answer", "schema": json_schema, "strict": True}}
-        if label == "gemini":  # Gemini 3 thinks at length by default (77 s for "say hi")
-            kwargs["reasoning_effort"] = "low"
-        for attempt in range(2):  # one try + one retry, then the next endpoint
+    for waited in (False, True):
+        state, now = load_state(), time.time()
+        for ep in endpoints:
+            st = state.get(ep["label"])
+            if st and st["until"] > now:
+                continue
             count_call("agent")
             t0 = time.monotonic()
             try:
-                resp = _client(base_url, api_key).chat.completions.create(**kwargs)
-                out = {**_message(resp), "model": model, "seconds": round(time.monotonic() - t0, 1)}
+                resp = _client(ep["base_url"], ep["api_key"]).chat.completions.create(
+                    **_kwargs(ep, messages, tools, tool_choice, json_schema))
+                out = {**_message(resp), "model": ep["model"], "endpoint": ep["label"],
+                       "seconds": round(time.monotonic() - t0, 1)}
                 if json_schema and not out["content"].strip():
-                    raise EmptyReply(f"{model} returned an empty answer")
-                cache_put("agent", key, out, {"model": model, "at": int(time.time())})
+                    raise EmptyReply(f"{ep['model']} returned an empty answer")
+                cache_put("agent", keys[ep["label"]], out, {"model": ep["model"], "at": int(time.time())})
                 return out
-            except Exception as e:  # noqa: BLE001 - filtered below
+            except (openai.APIError, EmptyReply) as e:
                 last_err = e
-                too_large = isinstance(e, openai.APIStatusError) and e.status_code == 413
-                if not (too_large or _retryable(e)):
-                    raise
-                next_step = "next endpoint" if too_large or attempt == 1 else "retrying"
-                print(f"    [agent llm] {label} {type(e).__name__}: {str(e)[:200]} ({next_step})", flush=True)
-                if too_large:
-                    break
-                if attempt == 0 and isinstance(e, openai.RateLimitError):
-                    wait = _retry_after(e) or _wait_hint(e) or 10.0
-                    if wait > RETRY_WAIT_MAX:
-                        break
-                    time.sleep(wait + 1)
-    raise LLMError(f"agent call failed on every endpoint: {last_err}")
+                reason, until = classify(e, ep["provider"], time.time())
+                if until:
+                    _mark(ep["label"], until, reason, str(e))
+                if reason == "spend":
+                    print(f"    [agent llm] {ep['label']}: SPEND CAP / BILLING error. A billing-enabled key is "
+                          "configured; remove it from .env (free-tier keys only).", flush=True)
+                note = f"cooling until {datetime.fromtimestamp(until, timezone.utc):%H:%M:%S} UTC" if until else "skipped"
+                print(f"    [agent llm] {ep['label']} {reason}: {type(e).__name__} {str(e)[:160]} ({note})", flush=True)
+        state, now = load_state(), time.time()
+        cooling = [state[ep["label"]]["until"] for ep in endpoints
+                   if ep["label"] in state and state[ep["label"]]["until"] > now]
+        if waited or not cooling or min(cooling) - now > AGENT_WAIT_MAX:
+            break
+        wait = min(cooling) - now + 1
+        print(f"    [agent llm] every endpoint busy; waiting {wait:.0f}s for the first to cool down", flush=True)
+        time.sleep(wait)
+    summary = "; ".join(f"{ep['label']}: {state.get(ep['label'], {}).get('reason', 'failed')} "
+                        f"until {state.get(ep['label'], {}).get('until_utc', '-')}" for ep in endpoints)
+    raise LLMError(f"no agent LLM endpoint answered ({summary}); last error: {last_err}")
