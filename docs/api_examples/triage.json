@@ -1,0 +1,651 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/triage"
+  },
+  "status": 200,
+  "response": {
+    "org": "im-Amrith",
+    "repo": "im-Amrith/lore-sandbox",
+    "items": [
+      {
+        "task_id": "task:triage:issue:im-Amrith/lore-sandbox#10",
+        "status": "open",
+        "opened_at": 1792218439,
+        "claimed_by": null,
+        "draft": null,
+        "approved_draft": null,
+        "approved_by": null,
+        "approved_at": null,
+        "issue_id": "issue:im-Amrith/lore-sandbox#10",
+        "number": 10,
+        "title": "Rate-limit link creation per API key",
+        "url": "https://github.com/im-Amrith/lore-sandbox/issues/10",
+        "issue_state": "open",
+        "body": "One API key created 50k links in an hour last week. We have no limit on link creation per key.\n\nWe should rate-limit link creation per API key and return `429` with a `Retry-After` header when the limit is hit.\n",
+        "related": {
+          "similar_issues": [
+            {
+              "id": "issue:im-Amrith/lore-sandbox#1",
+              "number": 1,
+              "title": "Cache misses spike after every deploy",
+              "state": "closed",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/1",
+              "distance": 0.320163071155548,
+              "fixes": [
+                "https://github.com/im-Amrith/lore-sandbox/pull/11"
+              ],
+              "modules": [
+                "module:lore-sandbox:docs",
+                "module:lore-sandbox:cache",
+                "module:lore-sandbox:api"
+              ],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#6",
+              "number": 6,
+              "title": "p99 redirect latency regressed after the Redis cache",
+              "state": "open",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/6",
+              "distance": 0.345023393630981,
+              "fixes": [],
+              "modules": [],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#9",
+              "number": 9,
+              "title": "CSV export times out above 100k clicks",
+              "state": "open",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/9",
+              "distance": 0.358888387680054,
+              "fixes": [],
+              "modules": [],
+              "duplicate_candidate": false
+            }
+          ],
+          "duplicate_candidates": [],
+          "modules": [
+            "module:lore-sandbox:docs",
+            "module:lore-sandbox:cache",
+            "module:lore-sandbox:api"
+          ],
+          "decisions": [
+            {
+              "id": "decision:3dd18586343e603b",
+              "statement": "The team decided to use a shared Redis link cache with a 24-hour TTL instead of keeping in-process LRU caches with pub/sub invalidation.",
+              "status": "active",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#11",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/11",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:cache"
+              ]
+            },
+            {
+              "id": "decision:c27e93e1119547f5",
+              "statement": "The project decided to generate short codes as random 7-character base62 strings using secrets and retrying on collision.",
+              "status": "active",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#12",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/12",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:docs",
+                "module:lore-sandbox:api"
+              ]
+            },
+            {
+              "id": "decision:10a3a00fea7a6a1b",
+              "statement": "Expired links return 410 Gone instead of 302 on redirects after their expiry time.",
+              "status": "active",
+              "kind": "behavior",
+              "confidence": 0.7,
+              "source_id": "doc:im-Amrith/lore-sandbox:docs/expiry.md",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/blob/main/docs/expiry.md",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:docs"
+              ]
+            }
+          ],
+          "pending_proposals": [
+            {
+              "id": "decision:fb6a827e08d45e47",
+              "statement": "Replace the Redis link cache with an in-process LRU cache and pub/sub invalidation.",
+              "status": "proposed",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#16",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/16",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:docs",
+                "module:lore-sandbox:cache"
+              ],
+              "note": "PR #16 is not merged; this is a proposal, not a current decision"
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "task:triage:issue:im-Amrith/lore-sandbox#9",
+        "status": "open",
+        "opened_at": 1792218439,
+        "claimed_by": null,
+        "draft": null,
+        "approved_draft": null,
+        "approved_by": null,
+        "approved_at": null,
+        "issue_id": "issue:im-Amrith/lore-sandbox#9",
+        "number": 9,
+        "title": "CSV export times out above 100k clicks",
+        "url": "https://github.com/im-Amrith/lore-sandbox/issues/9",
+        "issue_state": "open",
+        "body": "Exporting clicks as CSV times out for any link with more than about 100k clicks.\n\nThe export builds the whole file in memory before sending it. It should stream rows instead.\n",
+        "related": {
+          "similar_issues": [
+            {
+              "id": "issue:im-Amrith/lore-sandbox#4",
+              "number": 4,
+              "title": "Click counts drift between dashboard and export",
+              "state": "closed",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/4",
+              "distance": 0.194037258625031,
+              "fixes": [
+                "https://github.com/im-Amrith/lore-sandbox/pull/14"
+              ],
+              "modules": [
+                "module:lore-sandbox:analytics"
+              ],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#10",
+              "number": 10,
+              "title": "Rate-limit link creation per API key",
+              "state": "open",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/10",
+              "distance": 0.358888387680054,
+              "fixes": [],
+              "modules": [],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#8",
+              "number": 8,
+              "title": "Docs: explain how link expiry works",
+              "state": "open",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/8",
+              "distance": 0.391439080238342,
+              "fixes": [],
+              "modules": [],
+              "duplicate_candidate": false
+            }
+          ],
+          "duplicate_candidates": [],
+          "modules": [
+            "module:lore-sandbox:analytics"
+          ],
+          "decisions": [
+            {
+              "id": "decision:6f1065ea21f5a860",
+              "statement": "Clicks are counted only in the redirect handler once per redirect, and record_click ignores sources other than the handler.",
+              "status": "active",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#14",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/14",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:analytics"
+              ]
+            }
+          ],
+          "pending_proposals": []
+        }
+      },
+      {
+        "task_id": "task:triage:issue:im-Amrith/lore-sandbox#8",
+        "status": "approved",
+        "opened_at": 1792218439,
+        "claimed_by": null,
+        "draft": null,
+        "approved_draft": "Related: link expiry is handled in the cache layer (ADR 0001). Suggested owner: im-Amrith (docs/).",
+        "approved_by": "amrith",
+        "approved_at": 1792218495,
+        "issue_id": "issue:im-Amrith/lore-sandbox#8",
+        "number": 8,
+        "title": "Docs: explain how link expiry works",
+        "url": "https://github.com/im-Amrith/lore-sandbox/issues/8",
+        "issue_state": "open",
+        "body": "Nobody can find how and when links expire. Support keeps answering the same questions: what happens after a link expires, whether expired links still count clicks, and whether editing a link resets its expiry.\n\nWe need a short doc that explains link expiry end to end.\n"
+      },
+      {
+        "task_id": "task:triage:issue:im-Amrith/lore-sandbox#7",
+        "status": "open",
+        "opened_at": 1792218439,
+        "claimed_by": null,
+        "draft": null,
+        "approved_draft": null,
+        "approved_by": null,
+        "approved_at": null,
+        "issue_id": "issue:im-Amrith/lore-sandbox#7",
+        "number": 7,
+        "title": "Allow custom aliases for links",
+        "url": "https://github.com/im-Amrith/lore-sandbox/issues/7",
+        "issue_state": "open",
+        "body": "Users want to choose a readable alias for a link, such as `/launch`, instead of a random code.\n\nWe would need to check aliases against existing codes, reserve paths we use ourselves, and decide which characters are allowed.\n",
+        "related": {
+          "similar_issues": [
+            {
+              "id": "issue:im-Amrith/lore-sandbox#2",
+              "number": 2,
+              "title": "Short codes are guessable",
+              "state": "closed",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/2",
+              "distance": 0.350159764289856,
+              "fixes": [
+                "https://github.com/im-Amrith/lore-sandbox/pull/12"
+              ],
+              "modules": [
+                "module:lore-sandbox:docs",
+                "module:lore-sandbox:api"
+              ],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#3",
+              "number": 3,
+              "title": "Redirect returns 500 for codes with uppercase letters",
+              "state": "closed",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/3",
+              "distance": 0.361439526081085,
+              "fixes": [
+                "https://github.com/im-Amrith/lore-sandbox/pull/13"
+              ],
+              "modules": [
+                "module:lore-sandbox:tests",
+                "module:lore-sandbox:api"
+              ],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#8",
+              "number": 8,
+              "title": "Docs: explain how link expiry works",
+              "state": "open",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/8",
+              "distance": 0.370776891708374,
+              "fixes": [],
+              "modules": [],
+              "duplicate_candidate": false
+            }
+          ],
+          "duplicate_candidates": [],
+          "modules": [
+            "module:lore-sandbox:docs",
+            "module:lore-sandbox:api",
+            "module:lore-sandbox:tests"
+          ],
+          "decisions": [
+            {
+              "id": "decision:c27e93e1119547f5",
+              "statement": "The project decided to generate short codes as random 7-character base62 strings using secrets and retrying on collision.",
+              "status": "active",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#12",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/12",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:docs",
+                "module:lore-sandbox:api"
+              ]
+            },
+            {
+              "id": "decision:7f935dd073fbde4d",
+              "statement": "The redirect handler preserves short-code case end to end by removing the lowercasing step.",
+              "status": "active",
+              "kind": "behavior",
+              "confidence": 0.95,
+              "source_id": "pr:im-Amrith/lore-sandbox#13",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/13",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:api"
+              ]
+            },
+            {
+              "id": "decision:10a3a00fea7a6a1b",
+              "statement": "Expired links return 410 Gone instead of 302 on redirects after their expiry time.",
+              "status": "active",
+              "kind": "behavior",
+              "confidence": 0.7,
+              "source_id": "doc:im-Amrith/lore-sandbox:docs/expiry.md",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/blob/main/docs/expiry.md",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:docs"
+              ]
+            }
+          ],
+          "pending_proposals": [
+            {
+              "id": "decision:fb6a827e08d45e47",
+              "statement": "Replace the Redis link cache with an in-process LRU cache and pub/sub invalidation.",
+              "status": "proposed",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#16",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/16",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:docs"
+              ],
+              "note": "PR #16 is not merged; this is a proposal, not a current decision"
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "task:triage:issue:im-Amrith/lore-sandbox#6",
+        "status": "open",
+        "opened_at": 1792218439,
+        "claimed_by": null,
+        "draft": null,
+        "approved_draft": null,
+        "approved_by": null,
+        "approved_at": null,
+        "issue_id": "issue:im-Amrith/lore-sandbox#6",
+        "number": 6,
+        "title": "p99 redirect latency regressed after the Redis cache",
+        "url": "https://github.com/im-Amrith/lore-sandbox/issues/6",
+        "issue_state": "open",
+        "body": "Since the Redis link cache shipped, p99 redirect latency went from 4 ms to 12 ms. Every redirect now makes a network hop to Redis, even for the hottest links.\n\nOur setup has also changed since that decision: we now run 2 replicas in one region, not 3 replicas across 2 regions. We should revisit whether a shared cache is still worth the extra hop.\n",
+        "related": {
+          "similar_issues": [
+            {
+              "id": "issue:im-Amrith/lore-sandbox#1",
+              "number": 1,
+              "title": "Cache misses spike after every deploy",
+              "state": "closed",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/1",
+              "distance": 0.190674662590027,
+              "fixes": [
+                "https://github.com/im-Amrith/lore-sandbox/pull/11"
+              ],
+              "modules": [
+                "module:lore-sandbox:docs",
+                "module:lore-sandbox:cache",
+                "module:lore-sandbox:api"
+              ],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#3",
+              "number": 3,
+              "title": "Redirect returns 500 for codes with uppercase letters",
+              "state": "closed",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/3",
+              "distance": 0.308576643466949,
+              "fixes": [
+                "https://github.com/im-Amrith/lore-sandbox/pull/13"
+              ],
+              "modules": [
+                "module:lore-sandbox:tests",
+                "module:lore-sandbox:api"
+              ],
+              "duplicate_candidate": false
+            },
+            {
+              "id": "issue:im-Amrith/lore-sandbox#4",
+              "number": 4,
+              "title": "Click counts drift between dashboard and export",
+              "state": "closed",
+              "url": "https://github.com/im-Amrith/lore-sandbox/issues/4",
+              "distance": 0.3201784491539,
+              "fixes": [
+                "https://github.com/im-Amrith/lore-sandbox/pull/14"
+              ],
+              "modules": [
+                "module:lore-sandbox:analytics"
+              ],
+              "duplicate_candidate": false
+            }
+          ],
+          "duplicate_candidates": [],
+          "modules": [
+            "module:lore-sandbox:docs",
+            "module:lore-sandbox:cache",
+            "module:lore-sandbox:api",
+            "module:lore-sandbox:tests",
+            "module:lore-sandbox:analytics"
+          ],
+          "decisions": [
+            {
+              "id": "decision:3dd18586343e603b",
+              "statement": "The team decided to use a shared Redis link cache with a 24-hour TTL instead of keeping in-process LRU caches with pub/sub invalidation.",
+              "status": "active",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#11",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/11",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:cache"
+              ]
+            },
+            {
+              "id": "decision:7f935dd073fbde4d",
+              "statement": "The redirect handler preserves short-code case end to end by removing the lowercasing step.",
+              "status": "active",
+              "kind": "behavior",
+              "confidence": 0.95,
+              "source_id": "pr:im-Amrith/lore-sandbox#13",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/13",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:api"
+              ]
+            },
+            {
+              "id": "decision:6f1065ea21f5a860",
+              "statement": "Clicks are counted only in the redirect handler once per redirect, and record_click ignores sources other than the handler.",
+              "status": "active",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#14",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/14",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:analytics"
+              ]
+            }
+          ],
+          "pending_proposals": [
+            {
+              "id": "decision:fb6a827e08d45e47",
+              "statement": "Replace the Redis link cache with an in-process LRU cache and pub/sub invalidation.",
+              "status": "proposed",
+              "kind": "architecture",
+              "confidence": 1.0,
+              "source_id": "pr:im-Amrith/lore-sandbox#16",
+              "source_url": "https://github.com/im-Amrith/lore-sandbox/pull/16",
+              "parity": false,
+              "modules": [
+                "module:lore-sandbox:docs",
+                "module:lore-sandbox:cache"
+              ],
+              "note": "PR #16 is not merged; this is a proposal, not a current decision"
+            }
+          ]
+        }
+      }
+    ],
+    "cypher": [
+      {
+        "tool": "triage",
+        "query": "triage_inbox",
+        "cypher": "// 13 F5 triage inbox: triage Tasks with their issue, newest first. $status = '' for all.\n// draft / approved_draft are written by Steward (M13) and the approve route.\nMATCH (t:Task {type: 'triage'})-[:FOR]->(i:Issue)\nWHERE $status = '' OR t.status = $status\nRETURN t.id AS task_id, t.status AS status, t.at AS opened_at, t.claimed_by AS claimed_by,\n       t.draft AS draft, t.approved_draft AS approved_draft, t.approved_by AS approved_by,\n       t.approved_at AS approved_at,\n       i.id AS issue_id, i.number AS number, i.title AS title, i.url AS url, i.state AS issue_state,\n       left(coalesce(i.body, ''), 600) AS body\nORDER BY t.at DESC, i.number DESC\nLIMIT $limit\n",
+        "params": {
+          "status": "",
+          "limit": 20
+        },
+        "rows": 5
+      },
+      {
+        "tool": "related_work",
+        "query": "issue_text",
+        "cypher": "// 09 helper: the title and body of an issue already in the graph, so related_work can embed\n// it the same way stored issues are embedded, and post_triage can check the issue exists.\nMATCH (i:Issue {id: $issue_id})\nRETURN i.id AS id, i.number AS number, i.repo AS repo, i.title AS title, i.body AS body,\n       i.state AS state, i.url AS url\n",
+        "params": {
+          "issue_id": "issue:im-Amrith/lore-sandbox#10"
+        },
+        "rows": 1
+      },
+      {
+        "tool": "related_work",
+        "query": "similar_issues",
+        "cypher": "// 09 F5 triage: past issues most similar to a new one, and where they were fixed.\n// $issue_vec embeds the new issue (title + start of body, as stored on Issue.embedding).\n// score is a cosine DISTANCE (1 - cosine similarity, 0..2): lower = more similar, so rows\n// are ordered ascending and $max_distance drops weak matches. $issue_id (or null) excludes\n// the issue itself when it is already in the graph.\n// The modules come from the closing PR's commits and feed queries 5 and 6 (owner, reviewer).\nCALL db.idx.vector.queryNodes('Issue', 'embedding', $k, vecf32($issue_vec)) YIELD node, score\nWITH node AS similar, score AS distance\nWHERE similar.id <> coalesce($issue_id, '') AND distance <= $max_distance\nOPTIONAL MATCH (similar)<-[:CLOSES]-(pr:PullRequest)\nOPTIONAL MATCH (pr)<-[:PART_OF]-(:Commit)-[:TOUCHES]->(m:Module)\nRETURN similar.id AS id, similar.number AS number, similar.title AS title, similar.state AS state,\n       similar.url AS url, distance,\n       collect(DISTINCT pr.url) AS fixes, collect(DISTINCT m.id) AS modules\nORDER BY distance ASC\nLIMIT $limit\n",
+        "params": {
+          "issue_vec": "<vector, 384 dims>",
+          "issue_id": "issue:im-Amrith/lore-sandbox#10",
+          "k": 4,
+          "max_distance": 0.5,
+          "limit": 3
+        },
+        "rows": 3
+      },
+      {
+        "tool": "related_work",
+        "query": "module_decisions",
+        "cypher": "// 09 F5 triage: decisions that AFFECT any of $modules (the modules where similar issues were\n// fixed), with status and kind so the tool can keep proposed and superseded ones apart from\n// current ones. Decisions below $min_confidence are left out.\nUNWIND $modules AS mid\nMATCH (d:Decision)-[:AFFECTS]->(m:Module {id: mid})\nWHERE d.confidence >= $min_confidence\nWITH d, collect(DISTINCT m.id) AS modules\nRETURN d.id AS id, d.statement AS statement, d.status AS status, d.kind AS kind,\n       d.confidence AS confidence, d.source_id AS source_id, d.source_url AS source_url, modules\nORDER BY size(modules) DESC, d.valid_from DESC\nLIMIT $limit\n",
+        "params": {
+          "modules": [
+            "module:lore-sandbox:docs",
+            "module:lore-sandbox:cache",
+            "module:lore-sandbox:api"
+          ],
+          "min_confidence": 0.6,
+          "limit": 20
+        },
+        "rows": 8
+      },
+      {
+        "tool": "related_work",
+        "query": "issue_text",
+        "cypher": "// 09 helper: the title and body of an issue already in the graph, so related_work can embed\n// it the same way stored issues are embedded, and post_triage can check the issue exists.\nMATCH (i:Issue {id: $issue_id})\nRETURN i.id AS id, i.number AS number, i.repo AS repo, i.title AS title, i.body AS body,\n       i.state AS state, i.url AS url\n",
+        "params": {
+          "issue_id": "issue:im-Amrith/lore-sandbox#9"
+        },
+        "rows": 1
+      },
+      {
+        "tool": "related_work",
+        "query": "similar_issues",
+        "cypher": "// 09 F5 triage: past issues most similar to a new one, and where they were fixed.\n// $issue_vec embeds the new issue (title + start of body, as stored on Issue.embedding).\n// score is a cosine DISTANCE (1 - cosine similarity, 0..2): lower = more similar, so rows\n// are ordered ascending and $max_distance drops weak matches. $issue_id (or null) excludes\n// the issue itself when it is already in the graph.\n// The modules come from the closing PR's commits and feed queries 5 and 6 (owner, reviewer).\nCALL db.idx.vector.queryNodes('Issue', 'embedding', $k, vecf32($issue_vec)) YIELD node, score\nWITH node AS similar, score AS distance\nWHERE similar.id <> coalesce($issue_id, '') AND distance <= $max_distance\nOPTIONAL MATCH (similar)<-[:CLOSES]-(pr:PullRequest)\nOPTIONAL MATCH (pr)<-[:PART_OF]-(:Commit)-[:TOUCHES]->(m:Module)\nRETURN similar.id AS id, similar.number AS number, similar.title AS title, similar.state AS state,\n       similar.url AS url, distance,\n       collect(DISTINCT pr.url) AS fixes, collect(DISTINCT m.id) AS modules\nORDER BY distance ASC\nLIMIT $limit\n",
+        "params": {
+          "issue_vec": "<vector, 384 dims>",
+          "issue_id": "issue:im-Amrith/lore-sandbox#9",
+          "k": 4,
+          "max_distance": 0.5,
+          "limit": 3
+        },
+        "rows": 3
+      },
+      {
+        "tool": "related_work",
+        "query": "module_decisions",
+        "cypher": "// 09 F5 triage: decisions that AFFECT any of $modules (the modules where similar issues were\n// fixed), with status and kind so the tool can keep proposed and superseded ones apart from\n// current ones. Decisions below $min_confidence are left out.\nUNWIND $modules AS mid\nMATCH (d:Decision)-[:AFFECTS]->(m:Module {id: mid})\nWHERE d.confidence >= $min_confidence\nWITH d, collect(DISTINCT m.id) AS modules\nRETURN d.id AS id, d.statement AS statement, d.status AS status, d.kind AS kind,\n       d.confidence AS confidence, d.source_id AS source_id, d.source_url AS source_url, modules\nORDER BY size(modules) DESC, d.valid_from DESC\nLIMIT $limit\n",
+        "params": {
+          "modules": [
+            "module:lore-sandbox:analytics"
+          ],
+          "min_confidence": 0.6,
+          "limit": 20
+        },
+        "rows": 1
+      },
+      {
+        "tool": "related_work",
+        "query": "issue_text",
+        "cypher": "// 09 helper: the title and body of an issue already in the graph, so related_work can embed\n// it the same way stored issues are embedded, and post_triage can check the issue exists.\nMATCH (i:Issue {id: $issue_id})\nRETURN i.id AS id, i.number AS number, i.repo AS repo, i.title AS title, i.body AS body,\n       i.state AS state, i.url AS url\n",
+        "params": {
+          "issue_id": "issue:im-Amrith/lore-sandbox#7"
+        },
+        "rows": 1
+      },
+      {
+        "tool": "related_work",
+        "query": "similar_issues",
+        "cypher": "// 09 F5 triage: past issues most similar to a new one, and where they were fixed.\n// $issue_vec embeds the new issue (title + start of body, as stored on Issue.embedding).\n// score is a cosine DISTANCE (1 - cosine similarity, 0..2): lower = more similar, so rows\n// are ordered ascending and $max_distance drops weak matches. $issue_id (or null) excludes\n// the issue itself when it is already in the graph.\n// The modules come from the closing PR's commits and feed queries 5 and 6 (owner, reviewer).\nCALL db.idx.vector.queryNodes('Issue', 'embedding', $k, vecf32($issue_vec)) YIELD node, score\nWITH node AS similar, score AS distance\nWHERE similar.id <> coalesce($issue_id, '') AND distance <= $max_distance\nOPTIONAL MATCH (similar)<-[:CLOSES]-(pr:PullRequest)\nOPTIONAL MATCH (pr)<-[:PART_OF]-(:Commit)-[:TOUCHES]->(m:Module)\nRETURN similar.id AS id, similar.number AS number, similar.title AS title, similar.state AS state,\n       similar.url AS url, distance,\n       collect(DISTINCT pr.url) AS fixes, collect(DISTINCT m.id) AS modules\nORDER BY distance ASC\nLIMIT $limit\n",
+        "params": {
+          "issue_vec": "<vector, 384 dims>",
+          "issue_id": "issue:im-Amrith/lore-sandbox#7",
+          "k": 4,
+          "max_distance": 0.5,
+          "limit": 3
+        },
+        "rows": 3
+      },
+      {
+        "tool": "related_work",
+        "query": "module_decisions",
+        "cypher": "// 09 F5 triage: decisions that AFFECT any of $modules (the modules where similar issues were\n// fixed), with status and kind so the tool can keep proposed and superseded ones apart from\n// current ones. Decisions below $min_confidence are left out.\nUNWIND $modules AS mid\nMATCH (d:Decision)-[:AFFECTS]->(m:Module {id: mid})\nWHERE d.confidence >= $min_confidence\nWITH d, collect(DISTINCT m.id) AS modules\nRETURN d.id AS id, d.statement AS statement, d.status AS status, d.kind AS kind,\n       d.confidence AS confidence, d.source_id AS source_id, d.source_url AS source_url, modules\nORDER BY size(modules) DESC, d.valid_from DESC\nLIMIT $limit\n",
+        "params": {
+          "modules": [
+            "module:lore-sandbox:docs",
+            "module:lore-sandbox:api",
+            "module:lore-sandbox:tests"
+          ],
+          "min_confidence": 0.6,
+          "limit": 20
+        },
+        "rows": 6
+      },
+      {
+        "tool": "related_work",
+        "query": "issue_text",
+        "cypher": "// 09 helper: the title and body of an issue already in the graph, so related_work can embed\n// it the same way stored issues are embedded, and post_triage can check the issue exists.\nMATCH (i:Issue {id: $issue_id})\nRETURN i.id AS id, i.number AS number, i.repo AS repo, i.title AS title, i.body AS body,\n       i.state AS state, i.url AS url\n",
+        "params": {
+          "issue_id": "issue:im-Amrith/lore-sandbox#6"
+        },
+        "rows": 1
+      },
+      {
+        "tool": "related_work",
+        "query": "similar_issues",
+        "cypher": "// 09 F5 triage: past issues most similar to a new one, and where they were fixed.\n// $issue_vec embeds the new issue (title + start of body, as stored on Issue.embedding).\n// score is a cosine DISTANCE (1 - cosine similarity, 0..2): lower = more similar, so rows\n// are ordered ascending and $max_distance drops weak matches. $issue_id (or null) excludes\n// the issue itself when it is already in the graph.\n// The modules come from the closing PR's commits and feed queries 5 and 6 (owner, reviewer).\nCALL db.idx.vector.queryNodes('Issue', 'embedding', $k, vecf32($issue_vec)) YIELD node, score\nWITH node AS similar, score AS distance\nWHERE similar.id <> coalesce($issue_id, '') AND distance <= $max_distance\nOPTIONAL MATCH (similar)<-[:CLOSES]-(pr:PullRequest)\nOPTIONAL MATCH (pr)<-[:PART_OF]-(:Commit)-[:TOUCHES]->(m:Module)\nRETURN similar.id AS id, similar.number AS number, similar.title AS title, similar.state AS state,\n       similar.url AS url, distance,\n       collect(DISTINCT pr.url) AS fixes, collect(DISTINCT m.id) AS modules\nORDER BY distance ASC\nLIMIT $limit\n",
+        "params": {
+          "issue_vec": "<vector, 384 dims>",
+          "issue_id": "issue:im-Amrith/lore-sandbox#6",
+          "k": 4,
+          "max_distance": 0.5,
+          "limit": 3
+        },
+        "rows": 3
+      },
+      {
+        "tool": "related_work",
+        "query": "module_decisions",
+        "cypher": "// 09 F5 triage: decisions that AFFECT any of $modules (the modules where similar issues were\n// fixed), with status and kind so the tool can keep proposed and superseded ones apart from\n// current ones. Decisions below $min_confidence are left out.\nUNWIND $modules AS mid\nMATCH (d:Decision)-[:AFFECTS]->(m:Module {id: mid})\nWHERE d.confidence >= $min_confidence\nWITH d, collect(DISTINCT m.id) AS modules\nRETURN d.id AS id, d.statement AS statement, d.status AS status, d.kind AS kind,\n       d.confidence AS confidence, d.source_id AS source_id, d.source_url AS source_url, modules\nORDER BY size(modules) DESC, d.valid_from DESC\nLIMIT $limit\n",
+        "params": {
+          "modules": [
+            "module:lore-sandbox:docs",
+            "module:lore-sandbox:cache",
+            "module:lore-sandbox:api",
+            "module:lore-sandbox:tests",
+            "module:lore-sandbox:analytics"
+          ],
+          "min_confidence": 0.6,
+          "limit": 20
+        },
+        "rows": 9
+      }
+    ]
+  }
+}

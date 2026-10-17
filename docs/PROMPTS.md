@@ -285,6 +285,11 @@ Done when: I merge the decision-reversing PR in lore-sandbox, and within one syn
 - Empty, loading and error states on every screen.
 - Daily LLM cap and rate limit verified on the deployed site.
 - scripts/snapshot.py: save the raw cache and LLM cache to data/snapshots/ and restore from it, so the demo graph can be rebuilt without GitHub or new LLM calls.
+- scripts/reset_demo.py (asks for confirmation, --dry-run lists what it would remove): clear demo memory
+  (User/Session/Question/Answer and CITED edges for test and eval users), set approved/claimed triage Tasks back
+  to open (drop approved_draft, approved_by, approved_at, claimed_by), and delete test users such as dvir-fan,
+  whose (User)-[:IS]->(Person) link ties a fake user to a real contributor (DvirDukhan). Keep the knowledge
+  graph untouched. Then re-run warm.py and regenerate docs/api_examples/.
 - Fix anything ugly in the demo path; nothing new.
 
 Done when: I can run the full demo script twice in a row without a hitch.

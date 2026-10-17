@@ -1,0 +1,36 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/users"
+  },
+  "status": 200,
+  "response": {
+    "users": [
+      {
+        "id": "amrith",
+        "github_login": "im-Amrith",
+        "questions": 6,
+        "last_asked": 1792218777,
+        "person_ids": {
+          "im-Amrith": "person:im-Amrith"
+        }
+      },
+      {
+        "id": "dvir-fan",
+        "github_login": "DvirDukhan",
+        "questions": 1,
+        "last_asked": 1792218522,
+        "person_ids": {
+          "FalkorDB": "person:DvirDukhan"
+        }
+      },
+      {
+        "id": "eval",
+        "github_login": null,
+        "questions": 32,
+        "last_asked": 1792216879,
+        "person_ids": {}
+      }
+    ]
+  }
+}

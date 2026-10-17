@@ -1,0 +1,907 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/module/graph/src/parser?org=FalkorDB"
+  },
+  "status": 200,
+  "response": {
+    "org": "FalkorDB",
+    "module": {
+      "id": "module:FalkorDB:graph/src/parser",
+      "path": "graph/src/parser",
+      "repo": "FalkorDB",
+      "rank": 1,
+      "activity": 34.000106358666
+    },
+    "owners": {
+      "listed_owner": false,
+      "owners": [],
+      "paper_owners": [],
+      "active_experts": [
+        {
+          "id": "person:AviAvni",
+          "person": "AviAvni",
+          "score": 28.1817031998944,
+          "last_touch": 1792054180,
+          "evidence": [
+            "https://github.com/FalkorDB/FalkorDB/pull/3335",
+            "https://github.com/FalkorDB/FalkorDB/pull/3104",
+            "https://github.com/FalkorDB/FalkorDB/pull/2910"
+          ]
+        },
+        {
+          "id": "person:DvirDukhan",
+          "person": "DvirDukhan",
+          "score": 4.5088834391591,
+          "last_touch": 1792053933,
+          "evidence": []
+        },
+        {
+          "id": "person:gkorland",
+          "person": "gkorland",
+          "score": 1.3095197196125,
+          "last_touch": 1783207685,
+          "evidence": []
+        }
+      ],
+      "top_expert_is_owner": null,
+      "mismatch": true,
+      "codeowners_url": "https://github.com/FalkorDB/FalkorDB/blob/HEAD/CODEOWNERS",
+      "message": "no owner is listed for graph/src/parser in CODEOWNERS"
+    },
+    "experts": [
+      {
+        "person_id": "person:AviAvni",
+        "person": "AviAvni",
+        "name": "Avi Avni",
+        "score": 28.1817031998944,
+        "authored": 27.8121445391058,
+        "reviewed": 0.369558660788578,
+        "commits": 49,
+        "reviews": 1,
+        "last_touch": 1792054180,
+        "evidence": [
+          "https://github.com/FalkorDB/FalkorDB/pull/3335",
+          "https://github.com/FalkorDB/FalkorDB/pull/3104",
+          "https://github.com/FalkorDB/FalkorDB/pull/2910"
+        ],
+        "evidence_commits": [
+          "commit:b8321be81f620fb52d0363464d127321764589b6",
+          "commit:4a4f2a72f11c771f5db428cbf10d55247f7ba6c1",
+          "commit:dba677942ff9c9daa616d45a886200369957a341"
+        ],
+        "evidence_reviews": [
+          "https://github.com/FalkorDB/FalkorDB/pull/2262"
+        ]
+      },
+      {
+        "person_id": "person:DvirDukhan",
+        "person": "DvirDukhan",
+        "name": "Dvir Dukhan",
+        "score": 4.5088834391591,
+        "authored": null,
+        "reviewed": 4.5088834391591,
+        "commits": null,
+        "reviews": 10,
+        "last_touch": 1792053933,
+        "evidence": [],
+        "evidence_commits": [],
+        "evidence_reviews": [
+          "https://github.com/FalkorDB/FalkorDB/pull/3335",
+          "https://github.com/FalkorDB/FalkorDB/pull/3104",
+          "https://github.com/FalkorDB/FalkorDB/pull/2910"
+        ]
+      },
+      {
+        "person_id": "person:gkorland",
+        "person": "gkorland",
+        "name": "Guy Korland",
+        "score": 1.3095197196125,
+        "authored": 1.3095197196125,
+        "reviewed": null,
+        "commits": 2,
+        "reviews": null,
+        "last_touch": 1783207685,
+        "evidence": [],
+        "evidence_commits": [
+          "commit:9f7b673f5113a85f3206b45b7bccfc97cc13cc8d",
+          "commit:222c2628c92e09fe35582c94d4ce1b4521e794d4"
+        ],
+        "evidence_reviews": []
+      }
+    ],
+    "decisions": {
+      "decisions": [
+        {
+          "id": "decision:ae616b70f95d597c",
+          "statement": "Modify `parse_list_literal_or_comprehension` to avoid exponential backtracking on nested `[(...)]` lists by only attempting pattern comprehension where it can succeed via bracket counting and skipping already-failed attempts via memoization.",
+          "status": "active",
+          "kind": "architecture",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#3104",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3104",
+          "parity": false
+        },
+        {
+          "id": "decision:6121f33c4ccbe79e",
+          "statement": "Unicode string unescaping now strictly requires all 4 or 8 characters to be ASCII hex digits before parsing, rejecting leading plus signs.",
+          "status": "active",
+          "kind": "behavior",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#2910",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2910",
+          "parity": false
+        },
+        {
+          "id": "decision:15888add68f7904c",
+          "statement": "The lexer's whitespace skipping function now treats carriage return '\\r' as whitespace in accordance with the openCypher grammar.",
+          "status": "active",
+          "kind": "parity",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#2910",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2910",
+          "parity": true,
+          "note": "parity decision: matches existing behaviour (the C engine or openCypher) rather than a new choice"
+        },
+        {
+          "id": "decision:b242850a9a24dc44",
+          "statement": "Lexer::read_spaces was rewritten to end block comments only at */, treat any other / as division, and properly handle unterminated block comments or trailing slashes to match the C engine and openCypher.",
+          "status": "active",
+          "kind": "behavior",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#2908",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2908",
+          "parity": false
+        },
+        {
+          "id": "decision:d9dd389fd157e815",
+          "statement": "Correct hand-written parser rules in graph/src/parser/cypher.rs to align with the openCypher grammar and C engine behavior regarding NOT runs, IS NULL predicate chains, expression lists, SET and REMOVE targets, MATCH MATCH syntax, and LOAD CSV WITH HEADERS.",
+          "status": "active",
+          "kind": "behavior",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#3060",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3060",
+          "parity": false
+        },
+        {
+          "id": "decision:d16bd4797eef1bf1",
+          "statement": "The parser uses a ForbiddenPatternComprehension error enum to reject pattern comprehensions in inline property maps, MERGE ON CREATE/ON MATCH SET clauses, and index OPTIONS.",
+          "status": "active",
+          "kind": "behavior",
+          "confidence": 0.95,
+          "source_id": "pr:FalkorDB/FalkorDB#2874",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2874",
+          "parity": false
+        },
+        {
+          "id": "decision:0be431e4f1a8a71a",
+          "statement": "Parse parameter values directly into Value instances rather than building an intermediate expression tree.",
+          "status": "active",
+          "kind": "architecture",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#2451",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2451",
+          "parity": false
+        },
+        {
+          "id": "decision:78fe87c2a983f47f",
+          "statement": "The lexer error formatter cuts error contexts to an 80-byte window around the error position instead of embedding the entire query string.",
+          "status": "active",
+          "kind": "behavior",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#2442",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2442",
+          "parity": false
+        },
+        {
+          "id": "decision:13a7c016a3c9910a",
+          "statement": "Parser expression descent and tree depths are bounded by a MAX_TREE_DEPTH limit of 256 to prevent stack overflow crashes on deeply nested queries.",
+          "status": "active",
+          "kind": "behavior",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#2442",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2442",
+          "parity": false
+        },
+        {
+          "id": "decision:3b58517038731432",
+          "statement": "The identifier parser provides a non-allocating try_parse_ident method returning an Option for speculative call sites.",
+          "status": "active",
+          "kind": "architecture",
+          "confidence": 1.0,
+          "source_id": "pr:FalkorDB/FalkorDB#2442",
+          "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2442",
+          "parity": false
+        }
+      ],
+      "pending_proposals": [],
+      "history": []
+    },
+    "co_changed": [
+      {
+        "module_id": "module:FalkorDB:graph/src/runtime",
+        "module": "graph/src/runtime",
+        "count": 26,
+        "share_pct": 58.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 175.476066814996
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 71.6377462267553
+          },
+          {
+            "id": "person:barakb",
+            "person": "barakb",
+            "score": 32.5796150651252
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:076befde744af77b",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3339",
+            "statement": "Enforce a maximum value nesting depth of 4,096 levels on entry where nested values enter storage, RDB decode, property writes, and bulk inserts.",
+            "parity": false
+          },
+          {
+            "id": "decision:77bedcfad6ff416a",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3334",
+            "statement": "Enforce unique constraints by looking up each written entity's values in the constraint's supporting index instead of scanning the label once per entity.",
+            "parity": false
+          },
+          {
+            "id": "decision:a54d9f90de941cf3",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3307",
+            "statement": "The native index is updated once per unit of work rather than once per graph write call.",
+            "parity": false
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src/planner",
+        "module": "graph/src/planner",
+        "count": 22,
+        "share_pct": 49.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 51.622980383073
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 14.636896482118
+          },
+          {
+            "id": "person:gkorland",
+            "person": "gkorland",
+            "score": 6.70300404737335
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:6e18104f6b4ace27",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3335",
+            "statement": "The binder drops the Paren wrapper and flattens nested associative operations during expression binding.",
+            "parity": false
+          },
+          {
+            "id": "decision:fa125b97ec380b75",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3102",
+            "statement": "Replace the multi-pass self-loop reordering loop with a single-pass function named hop_order::self_loops_after_binders.",
+            "parity": false
+          },
+          {
+            "id": "decision:2c7e7f067eda7c63",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2845",
+            "statement": "Emit the body's entry projection unconditionally for every CALL {} subquery, projecting nothing when nothing is imported.",
+            "parity": false
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:/",
+        "module": "/",
+        "count": 14,
+        "share_pct": 31.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 85.749629295528
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 46.5884456172641
+          },
+          {
+            "id": "person:gkorland",
+            "person": "gkorland",
+            "score": 7.45781810837328
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:88e47a7417d74583",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/blob/main/docs/profiling.md",
+            "statement": "The team uses samply as the profiling tool for finding performance bottlenecks in the codebase.",
+            "parity": false
+          },
+          {
+            "id": "decision:a54142cc0c010d85",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3163",
+            "statement": "Move the toolchain and all referencing components from LLVM 22 to LLVM 23 to resolve profile format version mismatches in coverage jobs.",
+            "parity": false
+          },
+          {
+            "id": "decision:10969052dbeec517",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/2279",
+            "statement": "Migrate the default development branch to the Rust implementation of FalkorDB while keeping the C engine maintained and released from master.",
+            "parity": false
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src/graph",
+        "module": "graph/src/graph",
+        "count": 12,
+        "share_pct": 27.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 143.932608354697
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 49.5243876738128
+          },
+          {
+            "id": "person:gkorland",
+            "person": "gkorland",
+            "score": 5.84494045276719
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:a54d9f90de941cf3",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3307",
+            "statement": "The native index is updated once per unit of work rather than once per graph write call.",
+            "parity": false
+          },
+          {
+            "id": "decision:5c178356bac63152",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3290",
+            "statement": "Claim the MVCC write slot at escalation rather than at the start of a queued write.",
+            "parity": false
+          },
+          {
+            "id": "decision:ad33fe4e702ebe4d",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3277",
+            "statement": "Call self.resize() in get_type_id_mut after registering the type so relationship_type_matrix width stays synchronized with relationship_types.len().",
+            "parity": false
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:tests/flow",
+        "module": "tests/flow",
+        "count": 10,
+        "share_pct": 22.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 115.746687309317
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 86.2741744466554
+          },
+          {
+            "id": "person:swilly22",
+            "person": "swilly22",
+            "score": 31.9337262261371
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:28ab06355cf18ae2",
+            "kind": "behavior",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3328",
+            "statement": "Parse module-load arguments in graph_init using a single unified parser instead of two separate parsers, making option names ASCII case-insensitive, rejecting odd argument counts and unknown names, and applying load-only rules or GRAPH.CONFIG validators.",
+            "parity": false
+          },
+          {
+            "id": "decision:95984b29ddbee9fd",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3181",
+            "statement": "Runs redis-server in the Docker image as the unprivileged falkordb user instead of root using gosu.",
+            "parity": false
+          },
+          {
+            "id": "decision:dd33c4a1a0ae0872",
+            "kind": "parity",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3161",
+            "statement": "Rust now saves virtual keys as graphmeta, the type C uses, so that C keeps graphs in GRAPH.LIST during a downgrade.",
+            "parity": true,
+            "note": "parity decision: matches existing behaviour (the C engine or openCypher) rather than a new choice"
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:src",
+        "module": "src",
+        "count": 7,
+        "share_pct": 16.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 92.2033799071763
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 36.7197381909488
+          },
+          {
+            "id": "person:swilly22",
+            "person": "swilly22",
+            "score": 15.4926791527393
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:b90857d64bceef9b",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/issues/872",
+            "statement": "Switch from writing the graph to disk and loading from disk to using a PIPE and performing parallel encoding and decoding for GRAPH.COPY.",
+            "parity": false
+          },
+          {
+            "id": "decision:28ab06355cf18ae2",
+            "kind": "behavior",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3328",
+            "statement": "Parse module-load arguments in graph_init using a single unified parser instead of two separate parsers, making option names ASCII case-insensitive, rejecting odd argument counts and unknown names, and applying load-only rules or GRAPH.CONFIG validators.",
+            "parity": false
+          },
+          {
+            "id": "decision:5c178356bac63152",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3290",
+            "statement": "Claim the MVCC write slot at escalation rather than at the start of a queued write.",
+            "parity": false
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:src/commands",
+        "module": "src/commands",
+        "count": 4,
+        "share_pct": 9.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 45.0772632355826
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 24.2572483904734
+          },
+          {
+            "id": "person:swilly22",
+            "person": "swilly22",
+            "score": 11.9619181696113
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:b90857d64bceef9b",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/issues/872",
+            "statement": "Switch from writing the graph to disk and loading from disk to using a PIPE and performing parallel encoding and decoding for GRAPH.COPY.",
+            "parity": false
+          },
+          {
+            "id": "decision:076befde744af77b",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3339",
+            "statement": "Enforce a maximum value nesting depth of 4,096 levels on entry where nested values enter storage, RDB decode, property writes, and bulk inserts.",
+            "parity": false
+          },
+          {
+            "id": "decision:d8962e3d337d632b",
+            "kind": "parity",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3053",
+            "statement": "GRAPH.CONSTRAINT restricts entity types strictly to NODE or RELATIONSHIP, parses property counts using RedisString::parse_integer, and uses ASCII case-insensitive matching for keywords to match C engine behavior.",
+            "parity": true,
+            "note": "parity decision: matches existing behaviour (the C engine or openCypher) rather than a new choice"
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:tests",
+        "module": "tests",
+        "count": 4,
+        "share_pct": 9.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 34.7921330866093
+          },
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 14.8305456541572
+          },
+          {
+            "id": "person:barakb",
+            "person": "barakb",
+            "score": 8.59045509645941
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:5c178356bac63152",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3290",
+            "statement": "Claim the MVCC write slot at escalation rather than at the start of a queued write.",
+            "parity": false
+          },
+          {
+            "id": "decision:d9dd389fd157e815",
+            "kind": "behavior",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3060",
+            "statement": "Correct hand-written parser rules in graph/src/parser/cypher.rs to align with the openCypher grammar and C engine behavior regarding NOT runs, IS NULL predicate chains, expression lists, SET and REMOVE targets, MATCH MATCH syntax, and LOAD CSV WITH HEADERS.",
+            "parity": false
+          },
+          {
+            "id": "decision:0b362174ca7dbad2",
+            "kind": "process",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/1490",
+            "statement": "We decided to add RAMP package creation and upload steps for multiple OS versions including Amazon Linux 2023, RHEL8, RHEL9, and generic Linux.",
+            "parity": false
+          }
+        ]
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src/index",
+        "module": "graph/src/index",
+        "count": 4,
+        "share_pct": 9.0,
+        "module_commits": 45.0,
+        "experts": [
+          {
+            "id": "person:DvirDukhan",
+            "person": "DvirDukhan",
+            "score": 42.8630591655387
+          },
+          {
+            "id": "person:AviAvni",
+            "person": "AviAvni",
+            "score": 31.0632003996363
+          },
+          {
+            "id": "person:gkorland",
+            "person": "gkorland",
+            "score": 0.669328493876051
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision:a54d9f90de941cf3",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3307",
+            "statement": "The native index is updated once per unit of work rather than once per graph write call.",
+            "parity": false
+          },
+          {
+            "id": "decision:9812863d0dc7bfe6",
+            "kind": "architecture",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3285",
+            "statement": "Tighten the CowBTree const assert to only accept DOC_BYTES widths of 1, 2, 4, or 8.",
+            "parity": false
+          },
+          {
+            "id": "decision:38bbce51a67ddc8c",
+            "kind": "behavior",
+            "source_url": "https://github.com/FalkorDB/FalkorDB/pull/3087",
+            "statement": "Skip adding a vector field to the index when its length differs from the index dimension or when options are missing, matching C behavior and preventing wrong-dimension vectors from dropping entities from other indexes on the same label.",
+            "parity": false
+          }
+        ]
+      }
+    ],
+    "sources": {
+      "module:FalkorDB:graph/src/parser": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/graph/src/parser",
+      "person:AviAvni": "https://github.com/AviAvni",
+      "pr:FalkorDB/FalkorDB#3335": "https://github.com/FalkorDB/FalkorDB/pull/3335",
+      "pr:FalkorDB/FalkorDB#3104": "https://github.com/FalkorDB/FalkorDB/pull/3104",
+      "pr:FalkorDB/FalkorDB#2910": "https://github.com/FalkorDB/FalkorDB/pull/2910",
+      "person:DvirDukhan": "https://github.com/DvirDukhan",
+      "person:gkorland": "https://github.com/gkorland",
+      "codeowners": "https://github.com/FalkorDB/FalkorDB/blob/HEAD/CODEOWNERS",
+      "pr:FalkorDB/FalkorDB#2262": "https://github.com/FalkorDB/FalkorDB/pull/2262",
+      "commit:b8321be81f620fb52d0363464d127321764589b6": "https://github.com/FalkorDB/FalkorDB/commit/b8321be81f620fb52d0363464d127321764589b6",
+      "commit:4a4f2a72f11c771f5db428cbf10d55247f7ba6c1": "https://github.com/FalkorDB/FalkorDB/commit/4a4f2a72f11c771f5db428cbf10d55247f7ba6c1",
+      "commit:dba677942ff9c9daa616d45a886200369957a341": "https://github.com/FalkorDB/FalkorDB/commit/dba677942ff9c9daa616d45a886200369957a341",
+      "commit:9f7b673f5113a85f3206b45b7bccfc97cc13cc8d": "https://github.com/FalkorDB/FalkorDB/commit/9f7b673f5113a85f3206b45b7bccfc97cc13cc8d",
+      "commit:222c2628c92e09fe35582c94d4ce1b4521e794d4": "https://github.com/FalkorDB/FalkorDB/commit/222c2628c92e09fe35582c94d4ce1b4521e794d4",
+      "module:FalkorDB:graph/src/runtime": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/graph/src/runtime",
+      "decision:076befde744af77b": "https://github.com/FalkorDB/FalkorDB/pull/3339",
+      "decision:77bedcfad6ff416a": "https://github.com/FalkorDB/FalkorDB/pull/3334",
+      "decision:a54d9f90de941cf3": "https://github.com/FalkorDB/FalkorDB/pull/3307",
+      "decision:febe1fc52dbff6e5": "https://github.com/FalkorDB/FalkorDB/pull/3132",
+      "decision:6e4571280b5ad3cc": "https://github.com/FalkorDB/FalkorDB/pull/3127",
+      "decision:9689c38c46b0e4d6": "https://github.com/FalkorDB/FalkorDB/pull/3127",
+      "decision:cd7831eb505c88a8": "https://github.com/FalkorDB/FalkorDB/pull/3113",
+      "decision:4c05586445daeb4e": "https://github.com/FalkorDB/FalkorDB/pull/3094",
+      "decision:bcef24001b990aaa": "https://github.com/FalkorDB/FalkorDB/pull/3081",
+      "decision:4b6a5f3c4271172e": "https://github.com/FalkorDB/FalkorDB/pull/2990",
+      "decision:0d861316a13c7fee": "https://github.com/FalkorDB/FalkorDB/pull/2989",
+      "decision:cc13b60877cdc44b": "https://github.com/FalkorDB/FalkorDB/pull/2952",
+      "decision:d5bfc48efeedf621": "https://github.com/FalkorDB/FalkorDB/pull/2917",
+      "decision:e5c85897ed99a0e6": "https://github.com/FalkorDB/FalkorDB/pull/2917",
+      "decision:d9ab97819f7cd807": "https://github.com/FalkorDB/FalkorDB/pull/2917",
+      "decision:de161f45e3503f0f": "https://github.com/FalkorDB/FalkorDB/pull/2912",
+      "decision:266b3ac3c656575f": "https://github.com/FalkorDB/FalkorDB/pull/2912",
+      "decision:6a9c633c3c650329": "https://github.com/FalkorDB/FalkorDB/pull/2907",
+      "decision:2c7e7f067eda7c63": "https://github.com/FalkorDB/FalkorDB/pull/2845",
+      "decision:f05ce3dbbef7884e": "https://github.com/FalkorDB/FalkorDB/pull/2789",
+      "decision:ad1be69c53e8cbea": "https://github.com/FalkorDB/FalkorDB/pull/2788",
+      "decision:e552a94de6aa4131": "https://github.com/FalkorDB/FalkorDB/pull/2787",
+      "decision:0c37f991930d2e20": "https://github.com/FalkorDB/FalkorDB/pull/2757",
+      "decision:38c071035953618a": "https://github.com/FalkorDB/FalkorDB/pull/2712",
+      "decision:af8e57c89610a8bb": "https://github.com/FalkorDB/FalkorDB/pull/2708",
+      "decision:2ebab160d92baa46": "https://github.com/FalkorDB/FalkorDB/pull/2693",
+      "decision:90f54b4cb5a4d0a6": "https://github.com/FalkorDB/FalkorDB/pull/2690",
+      "decision:2261c46c2945b7b3": "https://github.com/FalkorDB/FalkorDB/pull/2686",
+      "decision:2b24ae2bd5014e67": "https://github.com/FalkorDB/FalkorDB/pull/2685",
+      "decision:333637643bcd18e0": "https://github.com/FalkorDB/FalkorDB/pull/2642",
+      "decision:fe3a1a28d99dfd19": "https://github.com/FalkorDB/FalkorDB/pull/2640",
+      "decision:7d7f9df057f4c314": "https://github.com/FalkorDB/FalkorDB/pull/2628",
+      "decision:a2bb645bb474cb2d": "https://github.com/FalkorDB/FalkorDB/pull/2624",
+      "decision:2fe08ce90531f5fb": "https://github.com/FalkorDB/FalkorDB/pull/2624",
+      "decision:82fa3cd07eb58d9f": "https://github.com/FalkorDB/FalkorDB/pull/2606",
+      "decision:2716b3220a40f4f3": "https://github.com/FalkorDB/FalkorDB/pull/2579",
+      "decision:4e78dac06e00ac70": "https://github.com/FalkorDB/FalkorDB/pull/2494",
+      "decision:19fe5724b1c24be3": "https://github.com/FalkorDB/FalkorDB/pull/2447",
+      "decision:013ae856bdf378a7": "https://github.com/FalkorDB/FalkorDB/pull/2428",
+      "decision:7c696c102fb92fb2": "https://github.com/FalkorDB/FalkorDB/pull/2416",
+      "decision:259a547162efa483": "https://github.com/FalkorDB/FalkorDB/pull/2396",
+      "decision:79ce1184a0bb8521": "https://github.com/FalkorDB/FalkorDB/pull/2390",
+      "decision:71b2e09c17f27248": "https://github.com/FalkorDB/FalkorDB/pull/2375",
+      "decision:9199d8b6be7b3a7f": "https://github.com/FalkorDB/FalkorDB/pull/2375",
+      "decision:dfa2f588be1dbf60": "https://github.com/FalkorDB/FalkorDB/pull/2365",
+      "decision:1017616f47939a04": "https://github.com/FalkorDB/FalkorDB/pull/2349",
+      "decision:ec7c3589badf1e40": "https://github.com/FalkorDB/FalkorDB/pull/2276",
+      "person:barakb": "https://github.com/barakb",
+      "module:FalkorDB:graph/src/planner": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/graph/src/planner",
+      "decision:6e18104f6b4ace27": "https://github.com/FalkorDB/FalkorDB/pull/3335",
+      "decision:fa125b97ec380b75": "https://github.com/FalkorDB/FalkorDB/pull/3102",
+      "decision:6964c61685a41c49": "https://github.com/FalkorDB/FalkorDB/pull/2829",
+      "decision:d476aead2c4a800c": "https://github.com/FalkorDB/FalkorDB/pull/2562",
+      "decision:b4017606753213bb": "https://github.com/FalkorDB/FalkorDB/pull/2491",
+      "module:FalkorDB:/": "https://github.com/FalkorDB/FalkorDB",
+      "decision:88e47a7417d74583": "https://github.com/FalkorDB/FalkorDB/blob/main/docs/profiling.md",
+      "decision:a54142cc0c010d85": "https://github.com/FalkorDB/FalkorDB/pull/3163",
+      "decision:10969052dbeec517": "https://github.com/FalkorDB/FalkorDB/pull/2279",
+      "decision:5bad716ec9b7ab3c": "https://github.com/FalkorDB/FalkorDB/pull/2259",
+      "decision:e04631329cf8b43c": "https://github.com/FalkorDB/FalkorDB/pull/1647",
+      "decision:d0efaf4777b09193": "https://github.com/FalkorDB/FalkorDB/pull/1563",
+      "decision:1c6566ad7542a31d": "https://github.com/FalkorDB/FalkorDB/pull/1182",
+      "module:FalkorDB:graph/src/graph": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/graph/src/graph",
+      "decision:5c178356bac63152": "https://github.com/FalkorDB/FalkorDB/pull/3290",
+      "decision:ad33fe4e702ebe4d": "https://github.com/FalkorDB/FalkorDB/pull/3277",
+      "decision:0f1e84d8297a9814": "https://github.com/FalkorDB/FalkorDB/pull/3088",
+      "decision:619816ee6cde5a62": "https://github.com/FalkorDB/FalkorDB/pull/3063",
+      "decision:e0cbb43ce187e99d": "https://github.com/FalkorDB/FalkorDB/pull/3022",
+      "decision:7a785cdf581a2df1": "https://github.com/FalkorDB/FalkorDB/pull/3022",
+      "decision:468ade6f5959107b": "https://github.com/FalkorDB/FalkorDB/pull/2911",
+      "decision:468a8cced5ed7a2f": "https://github.com/FalkorDB/FalkorDB/pull/2846",
+      "decision:c2743ba3de0b62ae": "https://github.com/FalkorDB/FalkorDB/pull/2797",
+      "decision:48e6604d410ebfda": "https://github.com/FalkorDB/FalkorDB/pull/2785",
+      "decision:7505c3f994914a94": "https://github.com/FalkorDB/FalkorDB/pull/2740",
+      "decision:af0efb1afea578ce": "https://github.com/FalkorDB/FalkorDB/pull/2707",
+      "decision:c1a28ce361baf21d": "https://github.com/FalkorDB/FalkorDB/pull/2691",
+      "decision:bf13980c495e2826": "https://github.com/FalkorDB/FalkorDB/pull/2691",
+      "decision:2bf6caaed5caeaca": "https://github.com/FalkorDB/FalkorDB/pull/2678",
+      "decision:991455d94a64f0a5": "https://github.com/FalkorDB/FalkorDB/pull/2674",
+      "decision:d39bc9a776a03ee9": "https://github.com/FalkorDB/FalkorDB/pull/2641",
+      "decision:ce4c9db6e285d98e": "https://github.com/FalkorDB/FalkorDB/pull/2572",
+      "decision:bd26295d8ef88d99": "https://github.com/FalkorDB/FalkorDB/pull/2571",
+      "decision:b98639fbba43b100": "https://github.com/FalkorDB/FalkorDB/pull/2570",
+      "decision:27e6a6f819c510b4": "https://github.com/FalkorDB/FalkorDB/pull/2565",
+      "decision:8af17d88b867e5d1": "https://github.com/FalkorDB/FalkorDB/pull/2523",
+      "decision:eca5c605b4b8530b": "https://github.com/FalkorDB/FalkorDB/pull/2523",
+      "decision:f185c1bc3ccbfa5a": "https://github.com/FalkorDB/FalkorDB/pull/2494",
+      "decision:312681e988a03272": "https://github.com/FalkorDB/FalkorDB/pull/2459",
+      "decision:ddc3a18c4f5c0b6e": "https://github.com/FalkorDB/FalkorDB/pull/2444",
+      "decision:503ce0abf7332806": "https://github.com/FalkorDB/FalkorDB/pull/2439",
+      "decision:6661153a006d70d4": "https://github.com/FalkorDB/FalkorDB/pull/2431",
+      "decision:e5aa8d9af08d4524": "https://github.com/FalkorDB/FalkorDB/pull/2378",
+      "decision:f76058eea413dd91": "https://github.com/FalkorDB/FalkorDB/pull/2377",
+      "decision:8d71d08f16a0f709": "https://github.com/FalkorDB/FalkorDB/pull/2344",
+      "module:FalkorDB:tests/flow": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/tests/flow",
+      "decision:28ab06355cf18ae2": "https://github.com/FalkorDB/FalkorDB/pull/3328",
+      "decision:95984b29ddbee9fd": "https://github.com/FalkorDB/FalkorDB/pull/3181",
+      "decision:dd33c4a1a0ae0872": "https://github.com/FalkorDB/FalkorDB/pull/3161",
+      "decision:b18e5a192b0cbdfb": "https://github.com/FalkorDB/FalkorDB/pull/3079",
+      "decision:cfe39d4201c3f7d7": "https://github.com/FalkorDB/FalkorDB/pull/3076",
+      "decision:8ae3b661c089a82a": "https://github.com/FalkorDB/FalkorDB/pull/3010",
+      "decision:54fccfafcd0e6f57": "https://github.com/FalkorDB/FalkorDB/pull/2943",
+      "decision:c0eb2d5bc44e7cfc": "https://github.com/FalkorDB/FalkorDB/pull/2867",
+      "decision:655035dc82b24de0": "https://github.com/FalkorDB/FalkorDB/pull/2704",
+      "decision:07e97b46c2ae3cb6": "https://github.com/FalkorDB/FalkorDB/pull/2366",
+      "decision:32f7faf665ea43d2": "https://github.com/FalkorDB/FalkorDB/pull/2304",
+      "decision:832bd605ec079309": "https://github.com/FalkorDB/FalkorDB/pull/2197",
+      "decision:0ab00bc9ed054533": "https://github.com/FalkorDB/FalkorDB/pull/1874",
+      "person:swilly22": "https://github.com/swilly22",
+      "module:FalkorDB:src": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/src",
+      "decision:b90857d64bceef9b": "https://github.com/FalkorDB/FalkorDB/issues/872",
+      "decision:c2eeb04204be7c32": "https://github.com/FalkorDB/FalkorDB/pull/3262",
+      "decision:d5da0f31f256b31d": "https://github.com/FalkorDB/FalkorDB/pull/3234",
+      "decision:063c637ce73c146f": "https://github.com/FalkorDB/FalkorDB/pull/3141",
+      "decision:7f4caf6c10046fd2": "https://github.com/FalkorDB/FalkorDB/pull/3021",
+      "decision:31ffe03b17601333": "https://github.com/FalkorDB/FalkorDB/pull/3014",
+      "decision:826186f3305433c6": "https://github.com/FalkorDB/FalkorDB/pull/3014",
+      "decision:00a2e3ea4a466d1d": "https://github.com/FalkorDB/FalkorDB/pull/3000",
+      "decision:fa9c6eeeb387802a": "https://github.com/FalkorDB/FalkorDB/pull/2921",
+      "decision:c5f3ce06c7611a2b": "https://github.com/FalkorDB/FalkorDB/pull/2833",
+      "decision:8f62af107cba233d": "https://github.com/FalkorDB/FalkorDB/pull/2636",
+      "decision:099d2c08c008d06c": "https://github.com/FalkorDB/FalkorDB/pull/2570",
+      "decision:d241248ea044f204": "https://github.com/FalkorDB/FalkorDB/pull/2570",
+      "decision:b3d2b1a9bdc75401": "https://github.com/FalkorDB/FalkorDB/pull/2554",
+      "decision:b918fc1c26b3f0de": "https://github.com/FalkorDB/FalkorDB/pull/2493",
+      "decision:85a7fb3aa76acffd": "https://github.com/FalkorDB/FalkorDB/pull/2493",
+      "decision:110c586bd8c4438e": "https://github.com/FalkorDB/FalkorDB/pull/2450",
+      "decision:5ee7847838aa2085": "https://github.com/FalkorDB/FalkorDB/pull/2445",
+      "decision:52b938cc2378bff4": "https://github.com/FalkorDB/FalkorDB/pull/2420",
+      "decision:9c26f50a2a55fb29": "https://github.com/FalkorDB/FalkorDB/pull/2420",
+      "decision:ed4f98d814056e27": "https://github.com/FalkorDB/FalkorDB/pull/2102",
+      "decision:683298377c156cd1": "https://github.com/FalkorDB/FalkorDB/pull/1877",
+      "decision:88d8990867be5fb7": "https://github.com/FalkorDB/FalkorDB/pull/1834",
+      "decision:b18d85a92a628f1b": "https://github.com/FalkorDB/FalkorDB/pull/1687",
+      "decision:29d1325776b65926": "https://github.com/FalkorDB/FalkorDB/pull/1612",
+      "decision:729de73f2099da17": "https://github.com/FalkorDB/FalkorDB/pull/1007",
+      "module:FalkorDB:src/commands": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/src/commands",
+      "decision:d8962e3d337d632b": "https://github.com/FalkorDB/FalkorDB/pull/3053",
+      "decision:a7cdb84b1a4816d5": "https://github.com/FalkorDB/FalkorDB/pull/3053",
+      "decision:69a34d9aff608ff3": "https://github.com/FalkorDB/FalkorDB/pull/2865",
+      "decision:aaf27f6b1d4b3e24": "https://github.com/FalkorDB/FalkorDB/pull/1460",
+      "module:FalkorDB:tests": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/tests",
+      "decision:d9dd389fd157e815": "https://github.com/FalkorDB/FalkorDB/pull/3060",
+      "decision:0b362174ca7dbad2": "https://github.com/FalkorDB/FalkorDB/pull/1490",
+      "module:FalkorDB:graph/src/index": "https://github.com/FalkorDB/FalkorDB/tree/HEAD/graph/src/index",
+      "decision:9812863d0dc7bfe6": "https://github.com/FalkorDB/FalkorDB/pull/3285",
+      "decision:38bbce51a67ddc8c": "https://github.com/FalkorDB/FalkorDB/pull/3087",
+      "decision:87e33db570559f79": "https://github.com/FalkorDB/FalkorDB/pull/3081",
+      "decision:ef005ba9118817a6": "https://github.com/FalkorDB/FalkorDB/pull/3072",
+      "decision:506c8104177c153f": "https://github.com/FalkorDB/FalkorDB/pull/2897",
+      "decision:1dfae88d68369c34": "https://github.com/FalkorDB/FalkorDB/pull/2897",
+      "decision:4160dd5c359e8aee": "https://github.com/FalkorDB/FalkorDB/pull/2350",
+      "decision:90c52ae51cf01eca": "https://github.com/FalkorDB/FalkorDB/pull/2350",
+      "decision:35b819f270ee8c4b": "https://github.com/FalkorDB/FalkorDB/pull/2278"
+    },
+    "cypher": [
+      {
+        "tool": "module_owners",
+        "query": "resolve_module",
+        "cypher": "// 05 helper: resolve what a user or agent calls a module to Module ids, for the tools that take\n// a module (find_experts, module_owners, impact_radius). Matches, best first:\n//   rank 0  the exact id               module:FalkorDB:graph/src/index\n//   rank 1  the exact path             graph/src/index\n//   rank 2  a path ending in /$q       index -> graph/src/index (and proofs/index, if any)\n// Ties go to the module with the most current expertise (sum of decayed EXPERT_IN scores):\n// on FalkorDB \"index\" matches both src/index (C engine, dormant) and graph/src/index (Rust).\n// $q is lowercased by the caller; ids and paths are compared lowercased. Module is small\n// (135 on FalkorDB), so the scan is cheap.\n// FalkorDB fix: without the parentheses, `a = $q OR p ENDS WITH '/' + $q` fails with\n// \"Type mismatch: expected Boolean but was String\" (the + binds differently than in Neo4j).\nMATCH (m:Module)\nWITH m, toLower(m.id) AS mid, toLower(m.path) AS mpath\nWHERE (mid = $q) OR (mpath = $q) OR (mpath ENDS WITH ('/' + $q))\nWITH m, CASE WHEN mid = $q THEN 0 WHEN mpath = $q THEN 1 ELSE 2 END AS rank\nOPTIONAL MATCH (:Person)-[e:EXPERT_IN]->(m)\nWITH m, rank, sum(coalesce(e.score, 0.0)) AS activity\nRETURN m.id AS id, m.path AS path, m.repo AS repo, rank, activity\nORDER BY rank ASC, activity DESC, size(m.path) ASC\nLIMIT $limit\n",
+        "params": {
+          "q": "graph/src/parser",
+          "limit": 5
+        },
+        "rows": 1
+      },
+      {
+        "tool": "module_owners",
+        "query": "module_owners",
+        "cypher": "// 06 F3 owners of one module: CODEOWNERS owners (people and teams) vs active experts.\n// Feeds the module_owners tool. Only the module's own OWNS edges count; owners are NOT\n// inherited from parent modules (FalkorDB's root \"/\" entry is the CODEOWNERS file\n// itself, not a catch-all). No OWNS edge -> listed_owner = false, i.e. \"no listed owner\" (golden q08).\n// paper = true for a person owner with no touch in 12 months, or a team none of whose\n// known members has touched the module (a team with no known members is never paper).\nMATCH (m:Module {id: $module})\nOPTIONAL MATCH (o)-[:OWNS]->(m)\nOPTIONAL MATCH (o)-[oe:EXPERT_IN]->(m)\nOPTIONAL MATCH (member:Person)-[:MEMBER_OF]->(o)\nOPTIONAL MATCH (member)-[me:EXPERT_IN]->(m)\nWHERE me.last_touch >= $now - 31536000\nWITH m, o, oe, count(DISTINCT member) AS n_members, count(DISTINCT me) AS active_members\nWITH m, collect(CASE WHEN o IS NULL THEN null ELSE {\n       id: o.id, kind: labels(o)[0], name: coalesce(o.login, o.name),\n       members: n_members,\n       paper: CASE WHEN labels(o)[0] = 'Team' THEN n_members > 0 AND active_members = 0\n                   ELSE oe IS NULL OR oe.last_touch < $now - 31536000 END\n     } END) AS owners\nOPTIONAL MATCH (x:Person)-[xe:EXPERT_IN]->(m)\nWHERE xe.score > 0.5\nWITH m, owners, x, xe ORDER BY xe.score DESC\nWITH m, owners,\n     collect({id: x.id, person: coalesce(x.login, x.name), score: xe.score, last_touch: xe.last_touch})[0..3] AS experts\nRETURN m.id AS module_id, m.path AS module, size(owners) > 0 AS listed_owner, owners,\n       experts AS active_experts\n",
+        "params": {
+          "module": "module:FalkorDB:graph/src/parser",
+          "now": 1792218777
+        },
+        "rows": 1
+      },
+      {
+        "tool": "module_owners",
+        "query": "who_knows",
+        "cypher": "// 05 F2 who-knows: top experts on a module, with evidence links.\n// Changed from the plan: evidence is the PRs that CONTAIN the person's commits on the\n// module, not PRs they authored. Commit-only authors (sandbox Marta, Priya) and people\n// whose commits went in under someone else's PR otherwise show no evidence.\n// Reviewed PRs on the module are returned too (evidence_reviews), so someone whose score\n// comes only from reviews still has a link to show. They're collected in a separate\n// WITH stage to avoid multiplying the commit rows.\n// $since (epoch seconds, 0 for all time) keeps only people whose last touch is that recent.\n// FalkorDB keeps the input order inside collect(), so ORDER BY before collecting\n// puts the most recent PRs and commits first.\nMATCH (p:Person)-[e:EXPERT_IN]->(m:Module {id: $module})\nWHERE e.score > 0.5 AND coalesce(e.last_touch, 0) >= $since\nOPTIONAL MATCH (p)-[:AUTHORED]->(c:Commit)-[:TOUCHES]->(m)\nWHERE NOT coalesce(c.bulk, false)\nOPTIONAL MATCH (c)-[:PART_OF]->(pr:PullRequest)\nWITH p, e, m, c, pr ORDER BY c.at DESC\nWITH p, e, m, collect(DISTINCT pr.url) AS prs, collect(DISTINCT c.id) AS commits\nOPTIONAL MATCH (p)-[r:REVIEWED]->(rpr:PullRequest)<-[:PART_OF]-(rc:Commit)-[:TOUCHES]->(m)\nWHERE NOT coalesce(rc.bulk, false) AND NOT (p)-[:AUTHORED]->(rpr)\nWITH p, e, prs, commits, rpr ORDER BY rpr.merged_at DESC\nWITH p, e, prs, commits, collect(DISTINCT rpr.url) AS reviewed_prs\nRETURN p.id AS person_id, coalesce(p.login, p.name) AS person, p.name AS name,\n       e.score AS score, e.authored AS authored, e.reviewed AS reviewed,\n       e.commits AS commits, e.reviews AS reviews, e.last_touch AS last_touch,\n       prs[0..3] AS evidence, commits[0..3] AS evidence_commits,\n       reviewed_prs[0..3] AS evidence_reviews\nORDER BY score DESC LIMIT 5\n",
+        "params": {
+          "module": "module:FalkorDB:graph/src/parser",
+          "since": 0
+        },
+        "rows": 3
+      },
+      {
+        "tool": "find_experts",
+        "query": "resolve_module",
+        "cypher": "// 05 helper: resolve what a user or agent calls a module to Module ids, for the tools that take\n// a module (find_experts, module_owners, impact_radius). Matches, best first:\n//   rank 0  the exact id               module:FalkorDB:graph/src/index\n//   rank 1  the exact path             graph/src/index\n//   rank 2  a path ending in /$q       index -> graph/src/index (and proofs/index, if any)\n// Ties go to the module with the most current expertise (sum of decayed EXPERT_IN scores):\n// on FalkorDB \"index\" matches both src/index (C engine, dormant) and graph/src/index (Rust).\n// $q is lowercased by the caller; ids and paths are compared lowercased. Module is small\n// (135 on FalkorDB), so the scan is cheap.\n// FalkorDB fix: without the parentheses, `a = $q OR p ENDS WITH '/' + $q` fails with\n// \"Type mismatch: expected Boolean but was String\" (the + binds differently than in Neo4j).\nMATCH (m:Module)\nWITH m, toLower(m.id) AS mid, toLower(m.path) AS mpath\nWHERE (mid = $q) OR (mpath = $q) OR (mpath ENDS WITH ('/' + $q))\nWITH m, CASE WHEN mid = $q THEN 0 WHEN mpath = $q THEN 1 ELSE 2 END AS rank\nOPTIONAL MATCH (:Person)-[e:EXPERT_IN]->(m)\nWITH m, rank, sum(coalesce(e.score, 0.0)) AS activity\nRETURN m.id AS id, m.path AS path, m.repo AS repo, rank, activity\nORDER BY rank ASC, activity DESC, size(m.path) ASC\nLIMIT $limit\n",
+        "params": {
+          "q": "module:falkordb:graph/src/parser",
+          "limit": 5
+        },
+        "rows": 1
+      },
+      {
+        "tool": "find_experts",
+        "query": "who_knows",
+        "cypher": "// 05 F2 who-knows: top experts on a module, with evidence links.\n// Changed from the plan: evidence is the PRs that CONTAIN the person's commits on the\n// module, not PRs they authored. Commit-only authors (sandbox Marta, Priya) and people\n// whose commits went in under someone else's PR otherwise show no evidence.\n// Reviewed PRs on the module are returned too (evidence_reviews), so someone whose score\n// comes only from reviews still has a link to show. They're collected in a separate\n// WITH stage to avoid multiplying the commit rows.\n// $since (epoch seconds, 0 for all time) keeps only people whose last touch is that recent.\n// FalkorDB keeps the input order inside collect(), so ORDER BY before collecting\n// puts the most recent PRs and commits first.\nMATCH (p:Person)-[e:EXPERT_IN]->(m:Module {id: $module})\nWHERE e.score > 0.5 AND coalesce(e.last_touch, 0) >= $since\nOPTIONAL MATCH (p)-[:AUTHORED]->(c:Commit)-[:TOUCHES]->(m)\nWHERE NOT coalesce(c.bulk, false)\nOPTIONAL MATCH (c)-[:PART_OF]->(pr:PullRequest)\nWITH p, e, m, c, pr ORDER BY c.at DESC\nWITH p, e, m, collect(DISTINCT pr.url) AS prs, collect(DISTINCT c.id) AS commits\nOPTIONAL MATCH (p)-[r:REVIEWED]->(rpr:PullRequest)<-[:PART_OF]-(rc:Commit)-[:TOUCHES]->(m)\nWHERE NOT coalesce(rc.bulk, false) AND NOT (p)-[:AUTHORED]->(rpr)\nWITH p, e, prs, commits, rpr ORDER BY rpr.merged_at DESC\nWITH p, e, prs, commits, collect(DISTINCT rpr.url) AS reviewed_prs\nRETURN p.id AS person_id, coalesce(p.login, p.name) AS person, p.name AS name,\n       e.score AS score, e.authored AS authored, e.reviewed AS reviewed,\n       e.commits AS commits, e.reviews AS reviews, e.last_touch AS last_touch,\n       prs[0..3] AS evidence, commits[0..3] AS evidence_commits,\n       reviewed_prs[0..3] AS evidence_reviews\nORDER BY score DESC LIMIT 5\n",
+        "params": {
+          "module": "module:FalkorDB:graph/src/parser",
+          "since": 0
+        },
+        "rows": 3
+      },
+      {
+        "tool": "impact_radius",
+        "query": "resolve_module",
+        "cypher": "// 05 helper: resolve what a user or agent calls a module to Module ids, for the tools that take\n// a module (find_experts, module_owners, impact_radius). Matches, best first:\n//   rank 0  the exact id               module:FalkorDB:graph/src/index\n//   rank 1  the exact path             graph/src/index\n//   rank 2  a path ending in /$q       index -> graph/src/index (and proofs/index, if any)\n// Ties go to the module with the most current expertise (sum of decayed EXPERT_IN scores):\n// on FalkorDB \"index\" matches both src/index (C engine, dormant) and graph/src/index (Rust).\n// $q is lowercased by the caller; ids and paths are compared lowercased. Module is small\n// (135 on FalkorDB), so the scan is cheap.\n// FalkorDB fix: without the parentheses, `a = $q OR p ENDS WITH '/' + $q` fails with\n// \"Type mismatch: expected Boolean but was String\" (the + binds differently than in Neo4j).\nMATCH (m:Module)\nWITH m, toLower(m.id) AS mid, toLower(m.path) AS mpath\nWHERE (mid = $q) OR (mpath = $q) OR (mpath ENDS WITH ('/' + $q))\nWITH m, CASE WHEN mid = $q THEN 0 WHEN mpath = $q THEN 1 ELSE 2 END AS rank\nOPTIONAL MATCH (:Person)-[e:EXPERT_IN]->(m)\nWITH m, rank, sum(coalesce(e.score, 0.0)) AS activity\nRETURN m.id AS id, m.path AS path, m.repo AS repo, rank, activity\nORDER BY rank ASC, activity DESC, size(m.path) ASC\nLIMIT $limit\n",
+        "params": {
+          "q": "module:falkordb:graph/src/parser",
+          "limit": 5
+        },
+        "rows": 1
+      },
+      {
+        "tool": "impact_radius",
+        "query": "impact_radius",
+        "cypher": "// 10 F8 impact radius: what usually changes together with $module, the active decisions\n// that affect those modules, and who knows them best (top EXPERT_IN).\n// Decisions below $min_confidence (DECISION_MIN_CONFIDENCE) are left out, as everywhere.\n// share = count / commits that touched $module under the same filter as the derive job\n// (not bulk, <= $max_modules modules), e.g. \"half of parser commits also touch planner\".\nMATCH (m:Module {id: $module})<-[:TOUCHES]-(c:Commit)-[:TOUCHES]->(x:Module)\nWHERE NOT coalesce(c.bulk, false)\nWITH m, c, count(x) AS k\nWITH m, sum(CASE WHEN k <= $max_modules THEN 1 ELSE 0 END) AS base\nMATCH (m)-[r:CO_CHANGED]-(n:Module)\nWHERE r.count >= $min_count\nOPTIONAL MATCH (d:Decision {status: 'active'})-[:AFFECTS]->(n)\nWHERE d.confidence >= $min_confidence\nWITH m, base, n, r, collect(DISTINCT {id: d.id, statement: d.statement, kind: d.kind, source_url: d.source_url}) AS decisions\nOPTIONAL MATCH (p:Person)-[e:EXPERT_IN]->(n)\nWITH base, n, r, decisions, p, e ORDER BY e.score DESC\nWITH base, n, r, decisions,\n     [x IN collect({id: p.id, person: coalesce(p.login, p.name), score: e.score}) WHERE x.person IS NOT NULL][0..3] AS experts\nRETURN n.id AS module_id, n.path AS module, r.count AS count,\n       CASE WHEN base > 0 THEN round(100.0 * r.count / base) ELSE 0 END AS share_pct,\n       base AS module_commits,\n       [x IN decisions WHERE x.id IS NOT NULL] AS decisions, experts\nORDER BY count DESC\nLIMIT $limit\n",
+        "params": {
+          "module": "module:FalkorDB:graph/src/parser",
+          "max_modules": 6,
+          "min_count": 3,
+          "limit": 10,
+          "min_confidence": 0.6
+        },
+        "rows": 9
+      },
+      {
+        "tool": "module_page",
+        "query": "module_decisions",
+        "cypher": "// 09 F5 triage: decisions that AFFECT any of $modules (the modules where similar issues were\n// fixed), with status and kind so the tool can keep proposed and superseded ones apart from\n// current ones. Decisions below $min_confidence are left out.\nUNWIND $modules AS mid\nMATCH (d:Decision)-[:AFFECTS]->(m:Module {id: mid})\nWHERE d.confidence >= $min_confidence\nWITH d, collect(DISTINCT m.id) AS modules\nRETURN d.id AS id, d.statement AS statement, d.status AS status, d.kind AS kind,\n       d.confidence AS confidence, d.source_id AS source_id, d.source_url AS source_url, modules\nORDER BY size(modules) DESC, d.valid_from DESC\nLIMIT $limit\n",
+        "params": {
+          "modules": [
+            "module:FalkorDB:graph/src/parser"
+          ],
+          "min_confidence": 0.6,
+          "limit": 30
+        },
+        "rows": 10
+      }
+    ]
+  }
+}

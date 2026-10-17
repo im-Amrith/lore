@@ -1,0 +1,379 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/ask",
+    "body": {
+      "org": "FalkorDB",
+      "user": "amrith",
+      "question": "Why did the Rust engine drop all_nodes_matrix?"
+    }
+  },
+  "status": 200,
+  "response": {
+    "question": "Why did the Rust engine drop all_nodes_matrix?",
+    "org": "FalkorDB",
+    "user": "amrith",
+    "intent": "why",
+    "found": true,
+    "not_found": "",
+    "answer": "The Rust engine removed the all_nodes_matrix from graph storage in PR #2678. [1][2] It was only maintained for a reader that no longer existed, caused write performance to scale linearly with the deleted-id set due to GraphBLAS structural upkeep, and bare nodes now cost practically nothing. [1] This resolved issue #2677, where writes after a mass delete cost far more than the work they did. [1][3] The team considered and rejected optimising the MVCC snapshot's deleted_nodes bitmap. [1] The change was proposed by AviAvni and approved by DvirDukhan. [1][4][5]",
+    "sentences": [
+      {
+        "text": "The Rust engine removed the all_nodes_matrix from graph storage in PR #2678.",
+        "cites": [
+          "decision:2bf6caaed5caeaca",
+          "pr:FalkorDB/FalkorDB#2678"
+        ]
+      },
+      {
+        "text": "It was only maintained for a reader that no longer existed, caused write performance to scale linearly with the deleted-id set due to GraphBLAS structural upkeep, and bare nodes now cost practically nothing.",
+        "cites": [
+          "decision:2bf6caaed5caeaca"
+        ]
+      },
+      {
+        "text": "This resolved issue #2677, where writes after a mass delete cost far more than the work they did.",
+        "cites": [
+          "decision:2bf6caaed5caeaca",
+          "issue:FalkorDB/FalkorDB#2677"
+        ]
+      },
+      {
+        "text": "The team considered and rejected optimising the MVCC snapshot's deleted_nodes bitmap.",
+        "cites": [
+          "decision:2bf6caaed5caeaca"
+        ]
+      },
+      {
+        "text": "The change was proposed by AviAvni and approved by DvirDukhan.",
+        "cites": [
+          "decision:2bf6caaed5caeaca",
+          "person:AviAvni",
+          "person:DvirDukhan"
+        ]
+      }
+    ],
+    "citations": [
+      {
+        "n": 1,
+        "id": "decision:2bf6caaed5caeaca",
+        "url": "https://github.com/FalkorDB/FalkorDB/pull/2678"
+      },
+      {
+        "n": 2,
+        "id": "pr:FalkorDB/FalkorDB#2678",
+        "url": "https://github.com/FalkorDB/FalkorDB/pull/2678"
+      },
+      {
+        "n": 3,
+        "id": "issue:FalkorDB/FalkorDB#2677",
+        "url": "https://github.com/FalkorDB/FalkorDB/issues/2677"
+      },
+      {
+        "n": 4,
+        "id": "person:AviAvni",
+        "url": "https://github.com/AviAvni"
+      },
+      {
+        "n": 5,
+        "id": "person:DvirDukhan",
+        "url": "https://github.com/DvirDukhan"
+      }
+    ],
+    "subgraph": {
+      "nodes": [
+        "decision:2bf6caaed5caeaca",
+        "pr:FalkorDB/FalkorDB#2678",
+        "decision:8af17d88b867e5d1",
+        "pr:FalkorDB/FalkorDB#2523",
+        "decision:e5aa8d9af08d4524",
+        "pr:FalkorDB/FalkorDB#2378",
+        "decision:991455d94a64f0a5",
+        "pr:FalkorDB/FalkorDB#2674",
+        "decision:48e6604d410ebfda",
+        "pr:FalkorDB/FalkorDB#2785",
+        "chunk:FalkorDB/FalkorDB:README.md#19",
+        "doc:FalkorDB/FalkorDB:README.md",
+        "chunk:FalkorDB/FalkorDB:bench/README.md#20",
+        "doc:FalkorDB/FalkorDB:bench/README.md",
+        "chunk:FalkorDB/FalkorDB:README.md#4",
+        "chunk:FalkorDB/FalkorDB:bench/README.md#17",
+        "chunk:FalkorDB/FalkorDB:bench/README.md#15",
+        "pr:FalkorDB/FalkorDB#2422",
+        "pr:FalkorDB/FalkorDB#2512",
+        "pr:FalkorDB/FalkorDB#3090",
+        "pr:FalkorDB/FalkorDB#2865",
+        "pr:FalkorDB/FalkorDB#1162",
+        "issue:FalkorDB/FalkorDB#3078",
+        "issue:FalkorDB/FalkorDB#3089",
+        "issue:FalkorDB/FalkorDB#2677",
+        "issue:FalkorDB/FalkorDB#2898",
+        "issue:FalkorDB/FalkorDB#2759",
+        "person:DvirDukhan",
+        "person:AviAvni",
+        "module:FalkorDB:graph/src/graph"
+      ],
+      "edges": [
+        {
+          "id": "decision:2bf6caaed5caeaca-DECIDED_IN->pr:FalkorDB/FalkorDB#2678",
+          "source": "decision:2bf6caaed5caeaca",
+          "type": "DECIDED_IN",
+          "target": "pr:FalkorDB/FalkorDB#2678"
+        },
+        {
+          "id": "decision:8af17d88b867e5d1-DECIDED_IN->pr:FalkorDB/FalkorDB#2523",
+          "source": "decision:8af17d88b867e5d1",
+          "type": "DECIDED_IN",
+          "target": "pr:FalkorDB/FalkorDB#2523"
+        },
+        {
+          "id": "decision:e5aa8d9af08d4524-DECIDED_IN->pr:FalkorDB/FalkorDB#2378",
+          "source": "decision:e5aa8d9af08d4524",
+          "type": "DECIDED_IN",
+          "target": "pr:FalkorDB/FalkorDB#2378"
+        },
+        {
+          "id": "decision:991455d94a64f0a5-DECIDED_IN->pr:FalkorDB/FalkorDB#2674",
+          "source": "decision:991455d94a64f0a5",
+          "type": "DECIDED_IN",
+          "target": "pr:FalkorDB/FalkorDB#2674"
+        },
+        {
+          "id": "decision:48e6604d410ebfda-DECIDED_IN->pr:FalkorDB/FalkorDB#2785",
+          "source": "decision:48e6604d410ebfda",
+          "type": "DECIDED_IN",
+          "target": "pr:FalkorDB/FalkorDB#2785"
+        },
+        {
+          "id": "chunk:FalkorDB/FalkorDB:README.md#19-PART_OF->doc:FalkorDB/FalkorDB:README.md",
+          "source": "chunk:FalkorDB/FalkorDB:README.md#19",
+          "type": "PART_OF",
+          "target": "doc:FalkorDB/FalkorDB:README.md"
+        },
+        {
+          "id": "chunk:FalkorDB/FalkorDB:bench/README.md#20-PART_OF->doc:FalkorDB/FalkorDB:bench/README.md",
+          "source": "chunk:FalkorDB/FalkorDB:bench/README.md#20",
+          "type": "PART_OF",
+          "target": "doc:FalkorDB/FalkorDB:bench/README.md"
+        },
+        {
+          "id": "chunk:FalkorDB/FalkorDB:README.md#4-PART_OF->doc:FalkorDB/FalkorDB:README.md",
+          "source": "chunk:FalkorDB/FalkorDB:README.md#4",
+          "type": "PART_OF",
+          "target": "doc:FalkorDB/FalkorDB:README.md"
+        },
+        {
+          "id": "chunk:FalkorDB/FalkorDB:bench/README.md#17-PART_OF->doc:FalkorDB/FalkorDB:bench/README.md",
+          "source": "chunk:FalkorDB/FalkorDB:bench/README.md#17",
+          "type": "PART_OF",
+          "target": "doc:FalkorDB/FalkorDB:bench/README.md"
+        },
+        {
+          "id": "chunk:FalkorDB/FalkorDB:bench/README.md#15-PART_OF->doc:FalkorDB/FalkorDB:bench/README.md",
+          "source": "chunk:FalkorDB/FalkorDB:bench/README.md#15",
+          "type": "PART_OF",
+          "target": "doc:FalkorDB/FalkorDB:bench/README.md"
+        },
+        {
+          "id": "pr:FalkorDB/FalkorDB#2678-REFERENCES->issue:FalkorDB/FalkorDB#2677",
+          "source": "pr:FalkorDB/FalkorDB#2678",
+          "type": "REFERENCES",
+          "target": "issue:FalkorDB/FalkorDB#2677"
+        },
+        {
+          "id": "pr:FalkorDB/FalkorDB#2678-CLOSES->issue:FalkorDB/FalkorDB#2677",
+          "source": "pr:FalkorDB/FalkorDB#2678",
+          "type": "CLOSES",
+          "target": "issue:FalkorDB/FalkorDB#2677"
+        },
+        {
+          "id": "person:DvirDukhan-APPROVED->decision:2bf6caaed5caeaca",
+          "source": "person:DvirDukhan",
+          "type": "APPROVED",
+          "target": "decision:2bf6caaed5caeaca"
+        },
+        {
+          "id": "person:AviAvni-PROPOSED->decision:2bf6caaed5caeaca",
+          "source": "person:AviAvni",
+          "type": "PROPOSED",
+          "target": "decision:2bf6caaed5caeaca"
+        },
+        {
+          "id": "decision:2bf6caaed5caeaca-AFFECTS->module:FalkorDB:graph/src/graph",
+          "source": "decision:2bf6caaed5caeaca",
+          "type": "AFFECTS",
+          "target": "module:FalkorDB:graph/src/graph"
+        }
+      ]
+    },
+    "path": [
+      {
+        "id": "decision:2bf6caaed5caeaca-DECIDED_IN->pr:FalkorDB/FalkorDB#2678",
+        "source": "decision:2bf6caaed5caeaca",
+        "type": "DECIDED_IN",
+        "target": "pr:FalkorDB/FalkorDB#2678"
+      },
+      {
+        "id": "pr:FalkorDB/FalkorDB#2678-REFERENCES->issue:FalkorDB/FalkorDB#2677",
+        "source": "pr:FalkorDB/FalkorDB#2678",
+        "type": "REFERENCES",
+        "target": "issue:FalkorDB/FalkorDB#2677"
+      },
+      {
+        "id": "pr:FalkorDB/FalkorDB#2678-CLOSES->issue:FalkorDB/FalkorDB#2677",
+        "source": "pr:FalkorDB/FalkorDB#2678",
+        "type": "CLOSES",
+        "target": "issue:FalkorDB/FalkorDB#2677"
+      },
+      {
+        "id": "person:DvirDukhan-APPROVED->decision:2bf6caaed5caeaca",
+        "source": "person:DvirDukhan",
+        "type": "APPROVED",
+        "target": "decision:2bf6caaed5caeaca"
+      },
+      {
+        "id": "person:AviAvni-PROPOSED->decision:2bf6caaed5caeaca",
+        "source": "person:AviAvni",
+        "type": "PROPOSED",
+        "target": "decision:2bf6caaed5caeaca"
+      },
+      {
+        "id": "decision:2bf6caaed5caeaca-AFFECTS->module:FalkorDB:graph/src/graph",
+        "source": "decision:2bf6caaed5caeaca",
+        "type": "AFFECTS",
+        "target": "module:FalkorDB:graph/src/graph"
+      }
+    ],
+    "cypher": [
+      {
+        "tool": "find_entities",
+        "query": "entry_decisions",
+        "cypher": "// 02 entry point, step 1: the starting Decision for a \"why\" question, vector + full-text.\n// Decisions are searched before docs, PRs and issues (02_entry_docs/prs/issues).\n//\n// Scores: the vector score is a cosine DISTANCE (1 - cosine similarity, 0..2, lower = closer;\n// checked on FalkorDB with identical, orthogonal and opposite vectors -> 0, 1, 2), and rows\n// come back nearest first. Full-text is a TF-IDF score, higher = better, sorted DESC here.\n// The scales differ, so ranks are fused, not scores: weighted reciprocal rank fusion (RRF)\n//   rank = (1/($rrf_k + vector_rank) + $text_weight/($rrf_k + text_rank)) * kind weight\n// over the vector top $k (20) and the full-text top $text_k (3), $text_weight 0.5, $rrf_k 60.\n// A list the node is missing from adds 0. Kind weight: parity = 0.5 (config). Decisions\n// below $min_confidence (0.6) are never a starting node.\n//\n// $q_text holds only the question's specific terms (identifiers like graphblas.sh or\n// all_nodes_matrix, acronyms like MVCC; see search.fulltext_query), or a token that\n// matches nothing, in which case the vector ranks alone decide. Measured on q01-q04 + s01:\n// an OR of all words, text top 20 -> ranks 2,6,6,1,1 (noise sitting in both lists beats the\n// vector's clear first hit); same, text top 3 -> 2,2,2,1,1; specific terms, text top 3\n// -> 1,1,2,1,1 (+ ADR 0001 rank 2 for s01).\n//\n// The full-text list is collected first with no grouping key, so it is one row even when\n// it matched nothing; the vector query always returns rows once embeddings exist.\nCALL db.idx.fulltext.queryNodes('Decision', $q_text) YIELD node, score\nWITH node, score ORDER BY score DESC LIMIT $text_k\nWITH collect({n: node, s: score}) AS text_hits\nCALL db.idx.vector.queryNodes('Decision', 'embedding', $k, vecf32($q_vec)) YIELD node, score\nWITH text_hits, node, score ORDER BY score ASC\nWITH text_hits, collect({n: node, s: score}) AS vec_hits\nUNWIND [h IN vec_hits | h.n] + [h IN text_hits | h.n] AS d\nWITH DISTINCT d, vec_hits, text_hits\nWHERE d.confidence >= $min_confidence\nWITH d,\n     [i IN range(0, size(vec_hits) - 1) WHERE vec_hits[i].n = d | i + 1][0] AS vec_rank,\n     [i IN range(0, size(text_hits) - 1) WHERE text_hits[i].n = d | i + 1][0] AS text_rank,\n     [h IN vec_hits WHERE h.n = d | h.s][0] AS distance\nWITH d, vec_rank, text_rank, distance,\n     (CASE WHEN vec_rank IS NULL THEN 0.0 ELSE 1.0 / ($rrf_k + vec_rank) END +\n      CASE WHEN text_rank IS NULL THEN 0.0 ELSE $text_weight / ($rrf_k + text_rank) END)\n       * coalesce(d.weight, 1.0) AS rank\nOPTIONAL MATCH (d)-[:DECIDED_IN]->(src)\nRETURN d.id AS id, d.statement AS statement, d.kind AS kind, d.status AS status,\n       d.confidence AS confidence, d.source_id AS source_id, d.source_url AS source_url,\n       collect(src.id) AS sources,\n       vec_rank, text_rank, distance, rank\nORDER BY rank DESC\nLIMIT $limit\n",
+        "params": {
+          "q_text": "all_nodes_matrix",
+          "q_vec": "<vector, 384 dims>",
+          "k": 20,
+          "text_k": 3,
+          "text_weight": 0.5,
+          "rrf_k": 60,
+          "min_confidence": 0.6,
+          "limit": 5
+        },
+        "rows": 5
+      },
+      {
+        "tool": "find_entities",
+        "query": "entry_docs",
+        "cypher": "// 02 entry point, step 2: doc chunks nearest to the question (vector only; score is a\n// cosine DISTANCE, lower = closer). Returns the doc so an answer can cite the page.\nCALL db.idx.vector.queryNodes('DocChunk', 'embedding', $k, vecf32($q_vec)) YIELD node, score\nMATCH (node)-[:PART_OF]->(doc:Doc)\nRETURN node.id AS id, doc.id AS doc_id, doc.path AS path, doc.url AS url,\n       left(node.text, 200) AS snippet, score AS distance\nORDER BY distance ASC\nLIMIT $limit\n",
+        "params": {
+          "q_vec": "<vector, 384 dims>",
+          "k": 10,
+          "limit": 5
+        },
+        "rows": 5
+      },
+      {
+        "tool": "find_entities",
+        "query": "entry_prs",
+        "cypher": "// 02 entry point, step 3: pull requests by full-text on title and body (TF-IDF score,\n// higher = better). Used after decisions, when no decision answers the question.\nCALL db.idx.fulltext.queryNodes('PullRequest', $q_text) YIELD node, score\nRETURN node.id AS id, node.number AS number, node.title AS title, node.url AS url, score\nORDER BY score DESC\nLIMIT $limit\n",
+        "params": {
+          "q_text": "rust|engine|drop|all_nodes_matrix",
+          "limit": 5
+        },
+        "rows": 5
+      },
+      {
+        "tool": "find_entities",
+        "query": "entry_issues",
+        "cypher": "// 02 entry point, step 4: issues nearest to the question (vector; score is a cosine\n// DISTANCE, lower = closer).\nCALL db.idx.vector.queryNodes('Issue', 'embedding', $k, vecf32($q_vec)) YIELD node, score\nRETURN node.id AS id, node.number AS number, node.title AS title, node.url AS url, score AS distance\nORDER BY distance ASC\nLIMIT $limit\n",
+        "params": {
+          "q_vec": "<vector, 384 dims>",
+          "k": 5,
+          "limit": 5
+        },
+        "rows": 5
+      },
+      {
+        "tool": "find_entities",
+        "query": "entry_modules",
+        "cypher": "// 02 entry point, names: modules whose last path segment is one of the question's words\n// (\"parser\" -> graph/src/parser). $terms are lowercased words, with a trailing 's' / 'es'\n// also tried by the caller (\"indexes\" -> index). Modules have no text to embed, so this is\n// a plain name match, most active module first (see 05_resolve_module); it lets find_entities hand back module ids for find_experts etc.\nUNWIND $terms AS t\nMATCH (m:Module)\nWHERE (toLower(m.path) = t) OR (toLower(m.path) ENDS WITH ('/' + t))  // parentheses: see 05_resolve_module\nWITH DISTINCT m, t\nOPTIONAL MATCH (:Person)-[e:EXPERT_IN]->(m)\nWITH m, t, sum(coalesce(e.score, 0.0)) AS activity\nRETURN m.id AS id, m.path AS path, m.repo AS repo, t AS term, activity\nORDER BY activity DESC, size(m.path) ASC\nLIMIT $limit\n",
+        "params": {
+          "terms": [
+            "rust",
+            "engine",
+            "drop",
+            "all_nodes_matrix"
+          ],
+          "limit": 5
+        },
+        "rows": 0
+      },
+      {
+        "tool": "find_entities",
+        "query": "entry_topics",
+        "cypher": "// 02 entry point, names: topics (docs/TOPICS.md ids) whose every hyphen-separated part is one\n// of the question's words: \"Why do we cache links in Redis?\" -> link-cache (words link, cache).\n// $terms are lowercased words plus de-pluralised forms (links -> link), from the caller.\nMATCH (topic:Topic)\nWHERE all(part IN split(topic.name, '-') WHERE part IN $terms)\nRETURN topic.name AS name, topic.covers AS covers\nORDER BY size(split(topic.name, '-')) DESC\nLIMIT $limit\n",
+        "params": {
+          "terms": [
+            "rust",
+            "engine",
+            "drop",
+            "all_nodes_matrix"
+          ],
+          "limit": 5
+        },
+        "rows": 0
+      },
+      {
+        "tool": "trace_decision",
+        "query": "trace_decision",
+        "cypher": "// 03 F1 why-trace: the lineage of a decision. $node_id is a Decision id, or the id of the\n// PR / issue / doc it was decided in (Decision.source_id), which returns every decision there.\n// Per decision:\n//   sources    DECIDED_IN targets (PR, issue, doc) with their urls\n//   issues     issues those sources CLOSE or REFERENCE (the problem the decision answered),\n//              ranked and capped at $max_issues (issue_count = how many there were):\n//                tier 0  the source CLOSES it and the issue REFERENCES the source back\n//                tier 1  CLOSES only     tier 2  links back only     tier 3  REFERENCES only\n//              then by cosine distance to $q_vec (the question; null = no ranking by text).\n//              Why the combined tier: FalkorDB PR #2279 replaced the whole tree and CLOSES\n//              116 issues, so CLOSES alone ties them all; its tracking issue #2280 is the only\n//              one that links back (golden q03).\n//   people     PROPOSED (source author) / APPROVED (approving reviewers)\n//   modules    AFFECTS targets\n//   history    older decisions this one SUPERSEDES (up to 5 hops)\n//   newer      decisions that SUPERSEDE this one (if any, this one is no longer current)\n//   proposals  status 'proposed' decisions (open or draft PRs) that AFFECT one of the same\n//              modules AND are ABOUT one of the same topics: an open PR that would change\n//              this decision. Sandbox: draft PR #16 (in-process LRU) vs PR #11 (Redis).\n//              If this decision is itself proposed, the same match finds the active ones it\n//              would replace.\n// Decisions below $min_confidence are left out at every step. Each OPTIONAL MATCH stage is\n// collected before the next, so rows don't multiply.\nMATCH (d:Decision)\nWHERE (d.id = $node_id OR d.source_id = $node_id) AND d.confidence >= $min_confidence\nOPTIONAL MATCH (d)-[:DECIDED_IN]->(src)\nWITH d, collect(DISTINCT {id: src.id, label: labels(src)[0], number: src.number,\n                          title: coalesce(src.title, src.path), url: src.url}) AS sources,\n     collect(DISTINCT src) AS src_nodes\nUNWIND (CASE WHEN size(src_nodes) = 0 THEN [null] ELSE src_nodes END) AS s\nOPTIONAL MATCH (s)-[ir:CLOSES|REFERENCES]->(issue:Issue)\nWITH d, sources, s, issue, collect(DISTINCT type(ir)) AS rels\nOPTIONAL MATCH (issue)-[back:REFERENCES]->(s)\nWITH d, sources, s, issue, rels, count(back) > 0 AS links_back\nWITH d, sources, s, issue, rels, links_back,\n     (CASE WHEN 'CLOSES' IN rels THEN 0 ELSE 2 END) + (CASE WHEN links_back THEN 0 ELSE 1 END) AS tier,\n     CASE WHEN issue IS NULL OR $q_vec IS NULL OR issue.embedding IS NULL THEN 2.0\n          ELSE vec.cosineDistance(issue.embedding, vecf32($q_vec)) END AS dist\nORDER BY tier, dist, issue.number DESC\nWITH d, sources, collect(CASE WHEN issue IS NULL THEN null ELSE {\n       id: issue.id, number: issue.number, title: issue.title, url: issue.url, via: s.id,\n       rels: rels, links_back: links_back, distance: dist} END) AS ranked\nWITH d, sources, ranked[0..$max_issues] AS issues, size(ranked) AS issue_count\nOPTIONAL MATCH (p:Person)-[pr:PROPOSED|APPROVED]->(d)\nWITH d, sources, issues, issue_count,\n     collect(DISTINCT {id: p.id, login: coalesce(p.login, p.name), role: type(pr)}) AS people\nOPTIONAL MATCH (d)-[:AFFECTS]->(m:Module)\nWITH d, sources, issues, issue_count, people, collect(DISTINCT m) AS mods\nOPTIONAL MATCH (d)-[:SUPERSEDES*1..5]->(older:Decision)\nWHERE older.confidence >= $min_confidence\nWITH d, sources, issues, issue_count, people, mods,\n     collect(DISTINCT {id: older.id, statement: older.statement, status: older.status,\n                       kind: older.kind, source_id: older.source_id, source_url: older.source_url,\n                       valid_to: older.valid_to}) AS history\nOPTIONAL MATCH (newer:Decision)-[:SUPERSEDES*1..5]->(d)\nWHERE newer.confidence >= $min_confidence\nWITH d, sources, issues, issue_count, people, mods, history,\n     collect(DISTINCT {id: newer.id, statement: newer.statement, status: newer.status,\n                       source_id: newer.source_id, source_url: newer.source_url}) AS newer\nOPTIONAL MATCH (d)-[:ABOUT]->(t:Topic)<-[:ABOUT]-(other:Decision)-[:AFFECTS]->(om:Module)\nWHERE other <> d AND om IN mods AND other.confidence >= $min_confidence\n  AND (other.status = 'proposed') <> (d.status = 'proposed')\n  AND (other.status = 'active' OR other.status = 'proposed')\nOPTIONAL MATCH (other)-[:DECIDED_IN]->(osrc)\nWITH d, sources, issues, issue_count, people, mods, history, newer, other, osrc, om, t\nWITH d, sources, issues, issue_count, people, mods, history, newer, other,\n     collect(DISTINCT coalesce(osrc.is_draft, false))[0] AS source_draft,\n     collect(DISTINCT osrc.state)[0] AS source_state,\n     collect(DISTINCT om.id) AS shared_modules, collect(DISTINCT t.name) AS shared_topics\nWITH d, sources, issues, issue_count, people, mods, history, newer,\n     collect(CASE WHEN other IS NULL THEN null ELSE {\n       id: other.id, statement: other.statement, status: other.status, kind: other.kind,\n       source_id: other.source_id, source_url: other.source_url,\n       source_draft: source_draft, source_state: source_state, shared_modules: shared_modules, shared_topics: shared_topics} END) AS rivals\nRETURN d.id AS id, d.statement AS statement, d.rationale AS rationale,\n       d.alternatives AS alternatives, d.quote AS quote, d.status AS status, d.kind AS kind,\n       d.confidence AS confidence, d.valid_from AS valid_from, d.valid_to AS valid_to,\n       d.source_id AS source_id, d.source_url AS source_url,\n       [x IN sources WHERE x.id IS NOT NULL] AS sources,\n       [x IN issues WHERE x.id IS NOT NULL] AS issues, issue_count,\n       [x IN people WHERE x.id IS NOT NULL] AS people,\n       [m IN mods | m.id] AS modules,\n       [x IN history WHERE x.id IS NOT NULL] AS history,\n       [x IN newer WHERE x.id IS NOT NULL] AS newer,\n       rivals\nORDER BY d.valid_from DESC\n",
+        "params": {
+          "node_id": "decision:2bf6caaed5caeaca",
+          "min_confidence": 0.6,
+          "max_issues": 6,
+          "q_vec": "<vector, 384 dims>"
+        },
+        "rows": 1
+      }
+    ],
+    "tool_calls": [
+      {
+        "tool": "find_entities",
+        "args": {
+          "org": "FalkorDB",
+          "text": "Why did the Rust engine drop all_nodes_matrix?"
+        },
+        "error": null
+      },
+      {
+        "tool": "trace_decision",
+        "args": {
+          "node_id": "decision:2bf6caaed5caeaca",
+          "org": "FalkorDB",
+          "question": "Why did the Rust engine drop all_nodes_matrix?"
+        },
+        "error": null
+      }
+    ],
+    "llm_calls": [
+      {
+        "model": "openai/gpt-oss-120b",
+        "endpoint": "groq:openai/gpt-oss-120b",
+        "prompt_tokens": 1962,
+        "seconds": 1.0,
+        "cached": null
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "endpoint": "gemini:gemini-3.8-flash",
+        "prompt_tokens": 2110,
+        "seconds": 4.0,
+        "cached": true
+      }
+    ],
+    "dropped": [],
+    "session_id": "session:amrith:2026-10-17",
+    "seconds": 1.4,
+    "answer_cache": null
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/memory/amrith"
+  },
+  "status": 200,
+  "response": {
+    "user": "amrith",
+    "orgs": {
+      "FalkorDB": {
+        "questions": [
+          {
+            "question_id": "question:7ab33d9f8f2d46c6",
+            "question": "Why did the Rust engine drop all_nodes_matrix?",
+            "intent": "why",
+            "at": 1792218777,
+            "session_id": "session:amrith:2026-10-17",
+            "answer_id": "answer:9c50d7970dfb4a33",
+            "answer": "The Rust engine removed the all_nodes_matrix from graph storage in PR #2678. [1][2] It was only maintained for a reader that no longer existed, caused write performance to scale linearly with the deleted-id set due to GraphBLAS structural upkeep, and bare nodes now cost practically nothing. [1] This",
+            "cited": [
+              "person:DvirDukhan",
+              "person:AviAvni",
+              "pr:FalkorDB/FalkorDB#2678",
+              "issue:FalkorDB/FalkorDB#2677",
+              "decision:2bf6caaed5caeaca"
+            ]
+          }
+        ],
+        "changes": [],
+        "sources": {
+          "person:DvirDukhan": "https://github.com/DvirDukhan",
+          "person:AviAvni": "https://github.com/AviAvni",
+          "pr:FalkorDB/FalkorDB#2678": "https://github.com/FalkorDB/FalkorDB/pull/2678",
+          "issue:FalkorDB/FalkorDB#2677": "https://github.com/FalkorDB/FalkorDB/issues/2677"
+        }
+      },
+      "im-Amrith": {
+        "questions": [
+          {
+            "question_id": "question:e42351763a384db6",
+            "question": "who owns analytics",
+            "intent": "owns",
+            "at": 1792218521,
+            "session_id": "session:amrith:2026-10-17",
+            "answer_id": "answer:2e0a54c6c95c480b",
+            "answer": "CODEOWNERS lists im-Angel2305 as the owner of analytics. [1][2][3] However, im-Angel2305 is a paper owner who is not among the active experts. [3][2] Priya Raman actually does the work in analytics with a score of 4. [2][4][5]",
+            "cited": [
+              "person:name:priya-raman",
+              "person:im-Angel2305",
+              "module:lore-sandbox:analytics",
+              "pr:im-Amrith/lore-sandbox#14"
+            ]
+          },
+          {
+            "question_id": "question:ad490a8a0b2e408a",
+            "question": "who owns analytics",
+            "intent": "owns",
+            "at": 1792218521,
+            "session_id": "session:amrith:2026-10-17",
+            "answer_id": "answer:0eab79c81d7845d4",
+            "answer": "CODEOWNERS lists im-Angel2305 as the owner of analytics. [1][2][3] However, im-Angel2305 is a paper owner who is not among the active experts. [3][2] Priya Raman actually does the work in analytics with a score of 4. [2][4][5]",
+            "cited": [
+              "person:name:priya-raman",
+              "person:im-Angel2305",
+              "module:lore-sandbox:analytics",
+              "pr:im-Amrith/lore-sandbox#14"
+            ]
+          },
+          {
+            "question_id": "question:ef48fad194314157",
+            "question": "who owns analytics",
+            "intent": "owns",
+            "at": 1792218520,
+            "session_id": "session:amrith:2026-10-17",
+            "answer_id": "answer:8d5b52a4fdd54444",
+            "answer": "CODEOWNERS lists im-Angel2305 as the owner of analytics. [1][2][3] However, im-Angel2305 is a paper owner who is not among the active experts. [3][2] Priya Raman actually does the work in analytics with a score of 4. [2][4][5]",
+            "cited": [
+              "person:name:priya-raman",
+              "person:im-Angel2305",
+              "module:lore-sandbox:analytics",
+              "pr:im-Amrith/lore-sandbox#14"
+            ]
+          },
+          {
+            "question_id": "question:acc3a9600bd147ff",
+            "question": "who owns analytics",
+            "intent": "owns",
+            "at": 1792218520,
+            "session_id": "session:amrith:2026-10-17",
+            "answer_id": "answer:615e3165c8f84aed",
+            "answer": "CODEOWNERS lists im-Angel2305 as the owner of analytics. [1][2][3] However, im-Angel2305 is a paper owner who is not among the active experts. [3][2] Priya Raman actually does the work in analytics with a score of 4. [2][4][5]",
+            "cited": [
+              "person:name:priya-raman",
+              "person:im-Angel2305",
+              "module:lore-sandbox:analytics",
+              "pr:im-Amrith/lore-sandbox#14"
+            ]
+          },
+          {
+            "question_id": "question:6ac9536e86da4929",
+            "question": "Who owns analytics?",
+            "intent": "owns",
+            "at": 1792218509,
+            "session_id": "session:amrith:2026-10-17",
+            "answer_id": "answer:8d31a909890244b7",
+            "answer": "CODEOWNERS lists im-Angel2305 as the owner of analytics. [1][2][3] However, im-Angel2305 is a paper owner who is not among the active experts. [3][2] Priya Raman actually does the work in analytics with a score of 4. [2][4][5]",
+            "cited": [
+              "person:name:priya-raman",
+              "person:im-Angel2305",
+              "module:lore-sandbox:analytics",
+              "pr:im-Amrith/lore-sandbox#14"
+            ]
+          }
+        ],
+        "changes": [],
+        "sources": {
+          "person:im-Angel2305": "https://github.com/im-Angel2305",
+          "module:lore-sandbox:analytics": "https://github.com/im-Amrith/lore-sandbox/tree/HEAD/analytics",
+          "pr:im-Amrith/lore-sandbox#14": "https://github.com/im-Amrith/lore-sandbox/pull/14"
+        }
+      }
+    },
+    "cypher": [
+      {
+        "tool": "recall",
+        "query": "recall_questions",
+        "cypher": "// 11 F6 memory read (the recall tool, part 1): this user's past questions, newest first,\n// with the nodes each answer cited. Every memory query starts from (:User {id: $user_id}),\n// so users never see each other's history. $topic ('' for all) keeps questions whose text\n// contains it (lowercased), or whose answer cited a node ABOUT a topic of that name.\n// FalkorDB fix: `any(k IN cited WHERE (k)-[:ABOUT]->(:Topic ...))` fails with \"Type mismatch:\n// expected Null but was Pointer\"; an OPTIONAL MATCH + count does the same.\nMATCH (:User {id: $user_id})-[:HAD]->(s:Session)-[:ASKED]->(q:Question)-[:ANSWERED_WITH]->(a:Answer)\nOPTIONAL MATCH (a)-[:CITED]->(k)\nOPTIONAL MATCH (k)-[:ABOUT]->(t:Topic {name: $topic})\nWITH s, q, a, collect(DISTINCT k) AS cited, count(t) AS on_topic\nWHERE $topic = '' OR toLower(q.text) CONTAINS $topic OR on_topic > 0\nRETURN q.id AS question_id, q.text AS question, q.intent AS intent, q.at AS at,\n       s.id AS session_id, a.id AS answer_id, left(a.text, 300) AS answer,\n       [k IN cited | k.id] AS cited\nORDER BY at DESC\nLIMIT $limit\n",
+        "params": {
+          "user_id": "amrith",
+          "topic": "",
+          "limit": 10
+        },
+        "rows": 1
+      },
+      {
+        "tool": "recall",
+        "query": "what_changed",
+        "cypher": "// 11 F6 what changed since I last asked: nodes this user's answers CITED that something newer\n// has since SUPERSEDED or REFERENCED (edge at > the answer's at). The plan's query 11, plus\n// the $topic filter of 11_recall_questions and the urls an answer needs.\nMATCH (:User {id: $user_id})-[:HAD]->(:Session)-[:ASKED]->(q:Question)\n      -[:ANSWERED_WITH]->(a:Answer)-[:CITED]->(k)\nOPTIONAL MATCH (k)-[:ABOUT]->(t:Topic {name: $topic})\nWITH q, a, k, count(t) AS on_topic\nWHERE $topic = '' OR toLower(q.text) CONTAINS $topic OR on_topic > 0\nMATCH (newer)-[r:SUPERSEDES|REFERENCES]->(k)\nWHERE r.at > a.at\nRETURN q.text AS question, a.at AS asked_at, k.id AS cited_id,\n       newer.id AS newer_id, labels(newer)[0] AS newer_label,\n       coalesce(newer.title, newer.statement) AS newer_title,\n       coalesce(newer.url, newer.source_url) AS newer_url,\n       type(r) AS change, r.at AS changed_at\nORDER BY changed_at DESC\nLIMIT $limit\n",
+        "params": {
+          "user_id": "amrith",
+          "topic": "",
+          "limit": 10
+        },
+        "rows": 0
+      },
+      {
+        "tool": "recall",
+        "query": "recall_questions",
+        "cypher": "// 11 F6 memory read (the recall tool, part 1): this user's past questions, newest first,\n// with the nodes each answer cited. Every memory query starts from (:User {id: $user_id}),\n// so users never see each other's history. $topic ('' for all) keeps questions whose text\n// contains it (lowercased), or whose answer cited a node ABOUT a topic of that name.\n// FalkorDB fix: `any(k IN cited WHERE (k)-[:ABOUT]->(:Topic ...))` fails with \"Type mismatch:\n// expected Null but was Pointer\"; an OPTIONAL MATCH + count does the same.\nMATCH (:User {id: $user_id})-[:HAD]->(s:Session)-[:ASKED]->(q:Question)-[:ANSWERED_WITH]->(a:Answer)\nOPTIONAL MATCH (a)-[:CITED]->(k)\nOPTIONAL MATCH (k)-[:ABOUT]->(t:Topic {name: $topic})\nWITH s, q, a, collect(DISTINCT k) AS cited, count(t) AS on_topic\nWHERE $topic = '' OR toLower(q.text) CONTAINS $topic OR on_topic > 0\nRETURN q.id AS question_id, q.text AS question, q.intent AS intent, q.at AS at,\n       s.id AS session_id, a.id AS answer_id, left(a.text, 300) AS answer,\n       [k IN cited | k.id] AS cited\nORDER BY at DESC\nLIMIT $limit\n",
+        "params": {
+          "user_id": "amrith",
+          "topic": "",
+          "limit": 10
+        },
+        "rows": 5
+      },
+      {
+        "tool": "recall",
+        "query": "what_changed",
+        "cypher": "// 11 F6 what changed since I last asked: nodes this user's answers CITED that something newer\n// has since SUPERSEDED or REFERENCED (edge at > the answer's at). The plan's query 11, plus\n// the $topic filter of 11_recall_questions and the urls an answer needs.\nMATCH (:User {id: $user_id})-[:HAD]->(:Session)-[:ASKED]->(q:Question)\n      -[:ANSWERED_WITH]->(a:Answer)-[:CITED]->(k)\nOPTIONAL MATCH (k)-[:ABOUT]->(t:Topic {name: $topic})\nWITH q, a, k, count(t) AS on_topic\nWHERE $topic = '' OR toLower(q.text) CONTAINS $topic OR on_topic > 0\nMATCH (newer)-[r:SUPERSEDES|REFERENCES]->(k)\nWHERE r.at > a.at\nRETURN q.text AS question, a.at AS asked_at, k.id AS cited_id,\n       newer.id AS newer_id, labels(newer)[0] AS newer_label,\n       coalesce(newer.title, newer.statement) AS newer_title,\n       coalesce(newer.url, newer.source_url) AS newer_url,\n       type(r) AS change, r.at AS changed_at\nORDER BY changed_at DESC\nLIMIT $limit\n",
+        "params": {
+          "user_id": "amrith",
+          "topic": "",
+          "limit": 10
+        },
+        "rows": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,647 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/risk?org=FalkorDB"
+  },
+  "status": 200,
+  "response": {
+    "org": "FalkorDB",
+    "repo": null,
+    "modules": [
+      {
+        "module_id": "module:FalkorDB:graph/src/parser",
+        "module": "graph/src/parser",
+        "bus_factor": 1,
+        "experts": [
+          "AviAvni"
+        ],
+        "expert_ids": [
+          "person:AviAvni"
+        ],
+        "share_pct": [
+          96.0
+        ],
+        "total_score": 29.1216642587183,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src/udf",
+        "module": "graph/src/udf",
+        "bus_factor": 1,
+        "experts": [
+          "AviAvni"
+        ],
+        "expert_ids": [
+          "person:AviAvni"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 12.5877882798196,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:fuzz/fuzz_targets",
+        "module": "fuzz/fuzz_targets",
+        "bus_factor": 1,
+        "experts": [
+          "AviAvni"
+        ],
+        "expert_ids": [
+          "person:AviAvni"
+        ],
+        "share_pct": [
+          94.0
+        ],
+        "total_score": 11.4185163842475,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:runtime-fuzz-target/src",
+        "module": "runtime-fuzz-target/src",
+        "bus_factor": 1,
+        "experts": [
+          "AviAvni"
+        ],
+        "expert_ids": [
+          "person:AviAvni"
+        ],
+        "share_pct": [
+          92.0
+        ],
+        "total_score": 9.16076728690964,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:tests/memcheck",
+        "module": "tests/memcheck",
+        "bus_factor": 1,
+        "experts": [
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          89.0
+        ],
+        "total_score": 4.76696515566164,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/udf",
+        "module": "src/udf",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          83.0
+        ],
+        "total_score": 3.97788710131501,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/resultset",
+        "module": "src/resultset",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          74.0
+        ],
+        "total_score": 3.39985556251336,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:docs",
+        "module": "docs",
+        "bus_factor": 1,
+        "experts": [
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          77.0
+        ],
+        "total_score": 2.89127746416897,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/configuration",
+        "module": "src/configuration",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          72.0
+        ],
+        "total_score": 2.79714073255321,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:.claude",
+        "module": ".claude",
+        "bus_factor": 1,
+        "experts": [
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 2.61799785431068,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/effects",
+        "module": "src/effects",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 2.28838083794462,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/bulk_insert",
+        "module": "src/bulk_insert",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          70.0
+        ],
+        "total_score": 2.24915964949103,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:deps/FalkorDB-core-rs",
+        "module": "deps/FalkorDB-core-rs",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          71.0
+        ],
+        "total_score": 2.15281390483405,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/schema",
+        "module": "src/schema",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          68.0
+        ],
+        "total_score": 2.08119434340864,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/bolt",
+        "module": "src/bolt",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          67.0
+        ],
+        "total_score": 1.94408170175705,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:native-deps/src",
+        "module": "native-deps/src",
+        "bus_factor": 1,
+        "experts": [
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 1.92045038866044,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:deps/GraphBLAS",
+        "module": "deps/GraphBLAS",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          55.0
+        ],
+        "total_score": 1.6498716907538,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:bench",
+        "module": "bench",
+        "bus_factor": 1,
+        "experts": [
+          "AviAvni"
+        ],
+        "expert_ids": [
+          "person:AviAvni"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 1.64206345048366,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/constraint",
+        "module": "src/constraint",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          85.0
+        ],
+        "total_score": 1.25428263727784,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:.cargo",
+        "module": ".cargo",
+        "bus_factor": 1,
+        "experts": [
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 1.18621292464555,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:.claude/worktrees",
+        "module": ".claude/worktrees",
+        "bus_factor": 1,
+        "experts": [
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 1.14532752197686,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:src/filter_tree",
+        "module": "src/filter_tree",
+        "bus_factor": 1,
+        "experts": [
+          "swilly22"
+        ],
+        "expert_ids": [
+          "person:swilly22"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 1.13395382721815,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:native-deps",
+        "module": "native-deps",
+        "bus_factor": 1,
+        "experts": [
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          100.0
+        ],
+        "total_score": 0.958896334086406,
+        "single_expert": true
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src/runtime",
+        "module": "graph/src/runtime",
+        "bus_factor": 2,
+        "experts": [
+          "AviAvni",
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:AviAvni",
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          62.0,
+          21.0
+        ],
+        "total_score": 268.122880830197,
+        "single_expert": false
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src/graph",
+        "module": "graph/src/graph",
+        "bus_factor": 2,
+        "experts": [
+          "AviAvni",
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:AviAvni",
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          75.0,
+          22.0
+        ],
+        "total_score": 183.440504958257,
+        "single_expert": false
+      },
+      {
+        "module_id": "module:FalkorDB:.github",
+        "module": ".github",
+        "bus_factor": 2,
+        "experts": [
+          "DvirDukhan",
+          "AviAvni"
+        ],
+        "expert_ids": [
+          "person:DvirDukhan",
+          "person:AviAvni"
+        ],
+        "share_pct": [
+          64.0,
+          17.0
+        ],
+        "total_score": 144.908154724199,
+        "single_expert": false
+      },
+      {
+        "module_id": "module:FalkorDB:src",
+        "module": "src",
+        "bus_factor": 2,
+        "experts": [
+          "AviAvni",
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:AviAvni",
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          62.0,
+          20.0
+        ],
+        "total_score": 140.475637441649,
+        "single_expert": false
+      },
+      {
+        "module_id": "module:FalkorDB:/",
+        "module": "/",
+        "bus_factor": 2,
+        "experts": [
+          "AviAvni",
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:AviAvni",
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          58.0,
+          30.0
+        ],
+        "total_score": 136.191819403583,
+        "single_expert": false
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src",
+        "module": "graph/src",
+        "bus_factor": 2,
+        "experts": [
+          "AviAvni",
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:AviAvni",
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          50.0,
+          16.0
+        ],
+        "total_score": 133.954612535867,
+        "single_expert": false
+      },
+      {
+        "module_id": "module:FalkorDB:graph/src/planner",
+        "module": "graph/src/planner",
+        "bus_factor": 2,
+        "experts": [
+          "AviAvni",
+          "DvirDukhan"
+        ],
+        "expert_ids": [
+          "person:AviAvni",
+          "person:DvirDukhan"
+        ],
+        "share_pct": [
+          73.0,
+          16.0
+        ],
+        "total_score": 68.6614208317177,
+        "single_expert": false
+      }
+    ],
+    "single_expert_modules": [
+      "graph/src/parser",
+      "graph/src/udf",
+      "fuzz/fuzz_targets",
+      "runtime-fuzz-target/src",
+      "tests/memcheck",
+      "src/udf",
+      "src/resultset",
+      "docs",
+      "src/configuration",
+      ".claude",
+      "src/effects",
+      "src/bulk_insert",
+      "deps/FalkorDB-core-rs",
+      "src/schema",
+      "src/bolt",
+      "native-deps/src",
+      "deps/GraphBLAS",
+      "bench",
+      "src/constraint",
+      ".cargo",
+      ".claude/worktrees",
+      "src/filter_tree",
+      "native-deps"
+    ],
+    "dormant_modules": 20,
+    "bridge_people": [
+      {
+        "person": "swilly22",
+        "id": "person:swilly22",
+        "score": 144.25
+      },
+      {
+        "person": "DvirDukhan",
+        "id": "person:DvirDukhan",
+        "score": 46.4166666666667
+      },
+      {
+        "person": "AviAvni",
+        "id": "person:AviAvni",
+        "score": 40.9166666666667
+      },
+      {
+        "person": "GomezGab",
+        "id": "person:GomezGab",
+        "score": 40.0
+      },
+      {
+        "person": "gkorland",
+        "id": "person:gkorland",
+        "score": 37.75
+      }
+    ],
+    "working_groups": [
+      {
+        "group_id": 269,
+        "size": 8,
+        "members": [
+          "shahar-biron",
+          "MuhammadQadora",
+          "barakb",
+          "GomezGab",
+          "olifarhaan",
+          "gkorland",
+          "aniruddhaadak80",
+          "DvirDukhan"
+        ],
+        "member_ids": [
+          "person:shahar-biron",
+          "person:MuhammadQadora",
+          "person:barakb",
+          "person:GomezGab",
+          "person:olifarhaan",
+          "person:gkorland",
+          "person:aniruddhaadak80",
+          "person:DvirDukhan"
+        ]
+      },
+      {
+        "group_id": 298,
+        "size": 4,
+        "members": [
+          "danshalev7",
+          "swilly22",
+          "dudizimber",
+          "AviAvni"
+        ],
+        "member_ids": [
+          "person:danshalev7",
+          "person:swilly22",
+          "person:dudizimber",
+          "person:AviAvni"
+        ]
+      }
+    ],
+    "thresholds": {
+      "min_score": 0.9,
+      "min_share": 0.1,
+      "window_days": 180
+    },
+    "cypher": [
+      {
+        "tool": "knowledge_risk",
+        "query": "bus_factor",
+        "cypher": "// 07 F4 knowledge risk per module: bus factor = number of people who could maintain it.\n// Tuned against the golden set (q09, s03); the plan's rule (score >= 1.0, touched in 180 days)\n// gave graph/src/parser 3 and graph/src/udf 2, because reviews alone (Dvir's 4.5 on parser)\n// and two stray commits (gkorland's 1.3) cleared the bar. A person counts here when:\n//   - authored >= $min_score (0.9, about one commit this week): they wrote code there;\n//     reviewing alone doesn't make you a maintainer\n//   - authored >= $min_share (0.10) of the module's total authored score: a real share,\n//     not a drive-by fix\n//   - last_authored within $window seconds (180 days)\n// Values live in config.py (BUS_FACTOR_*).\n// $repo (repo name, or '' for all) limits the list to one repo's modules (Module.repo).\n// Modules whose total authored score is 0 (only bots or bulk commits) are left out.\n// Order: single points of failure first (1, 2, ...), then dormant modules (bus_factor 0:\n// nobody has authored a real share in the window) at the end, so tiny old modules don't\n// crowd out the risk list.\nMATCH (m:Module)\nWHERE $repo = '' OR m.repo = $repo\nOPTIONAL MATCH (:Person)-[x:EXPERT_IN]->(m)\nWITH m, sum(coalesce(x.authored, 0.0)) AS total\nWHERE total > 0\nOPTIONAL MATCH (p:Person)-[e:EXPERT_IN]->(m)\nWHERE e.authored >= $min_score AND e.authored >= $min_share * total\n  AND e.last_authored > $now - $window\nWITH m, total, p, e ORDER BY e.authored DESC\nWITH m, total,\n     collect(coalesce(p.login, p.name)) AS experts, collect(p.id) AS expert_ids,\n     collect(round(100.0 * e.authored / total)) AS shares\nRETURN m.id AS module_id, m.path AS module, size(experts) AS bus_factor, experts, expert_ids,\n       shares AS share_pct, total AS total_score\nORDER BY CASE WHEN bus_factor = 0 THEN 1 ELSE 0 END, bus_factor ASC, total_score DESC\n",
+        "params": {
+          "now": 1792218778,
+          "min_score": 0.9,
+          "min_share": 0.1,
+          "window": 15552000,
+          "repo": ""
+        },
+        "rows": 76
+      },
+      {
+        "tool": "knowledge_risk",
+        "query": "betweenness",
+        "cypher": "// 08 F4 bridge people: betweenness centrality on the COLLABORATES graph.\n// High score = many shortest author/reviewer paths run through this person, so their\n// departure would split the contributor network. samplingSeed is fixed so repeated runs\n// (and the demo) give the same ranking; samplingSize caps the source nodes sampled.\nCALL algo.betweenness({nodeLabels: ['Person'], relationshipTypes: ['COLLABORATES'],\n                       samplingSize: $sampling_size, samplingSeed: $seed})\nYIELD node, score\nWHERE score > 0\nRETURN coalesce(node.login, node.name) AS person, node.id AS id, score\nORDER BY score DESC\nLIMIT $limit\n",
+        "params": {
+          "limit": 5,
+          "sampling_size": 200,
+          "seed": 42
+        },
+        "rows": 5
+      },
+      {
+        "tool": "knowledge_risk",
+        "query": "label_propagation",
+        "cypher": "// 08 F10 working groups: label propagation (community detection) on COLLABORATES_STRONG\n// (repeat collaborators only; see 08_collaborates_strong for why not plain COLLABORATES).\n// Each person starts with their own label and repeatedly adopts the most common label among\n// their neighbours, so people who review each other end up in one group.\n// Groups of one (isolated people, bots) are dropped.\nCALL algo.labelPropagation({nodeLabels: ['Person'], relationshipTypes: ['COLLABORATES_STRONG']})\nYIELD node, communityId\nWITH communityId, collect(coalesce(node.login, node.name)) AS members, collect(node.id) AS member_ids,\n     count(*) AS size\nWHERE size >= 2\nRETURN communityId AS group_id, size, members, member_ids\nORDER BY size DESC\n",
+        "params": {},
+        "rows": 2
+      }
+    ]
+  }
+}
