@@ -95,6 +95,7 @@ uv run --directory backend python scripts/eval.py               # golden set: re
 uv run --directory backend python scripts/warm.py               # pre-answer the demo questions into the answer cache (--check: report only, no LLM)
 uv run --directory backend python scripts/tasks.py              # Librarian: open triage Tasks for open sandbox issues (--issue 9 10)
 uv run --directory backend uvicorn lore.api.app:app --port 8000 # API; OpenAPI docs at http://localhost:8000/docs
+cd frontend; npm install; npm run dev; cd ..                   # UI on http://localhost:3001 (API URL: frontend/.env.local, NEXT_PUBLIC_API_URL)
 ```
 
 ## Conventions

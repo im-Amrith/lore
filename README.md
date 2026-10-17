@@ -68,7 +68,12 @@ uv run --directory backend python scripts/eval.py                             # 
 uv run --directory backend python scripts/warm.py                             # pre-answer the demo questions (answer cache)
 uv run --directory backend python scripts/tasks.py                            # open triage Tasks for open sandbox issues
 uv run --directory backend uvicorn lore.api.app:app --port 8000               # API, docs at http://localhost:8000/docs
+cd frontend; copy .env.example .env.local; npm install; npm run dev           # UI on http://localhost:3001
 ```
+
+### Frontend
+
+`frontend/` is Next.js 16 + Tailwind 4, with Cytoscape.js for the evidence graph. The Ask screen has the conversation on the left and, on the right, the answer's subgraph with the walked path (the edges touching a cited node) drawn in teal and the rest of what was retrieved dimmed. Every sentence carries numbered citations that open the GitHub page; hovering one lights its node. Each answer shows which model wrote it, a "cached" badge when it came from the answer cache, and a "Show query" toggle with every Cypher query, its parameters and row count. While the Navigator works, `POST /ask/stream` streams each tool call and LLM step, so the screen shows what is being looked up. "Not found" answers get their own state with the nearest evidence; claims that rest on an unmerged proposal get a "draft PR proposes changing this" callout.
 
 ### API
 
@@ -107,5 +112,6 @@ This project is built with Claude Code (Anthropic) as a coding assistant. The pl
 - M5 decisions (`backend/lore/llm/`, `ingest/extract.py`, extraction prompt, queries 01 decision loaders and 20): written with Claude Code. Decision extraction itself runs on Gemini (`LLM_FAST_MODEL`); every decision keeps a verified source quote and link.
 - M8 lore-mcp (`backend/lore/mcp_server/`, `lore/safety.py`, queries 03, 02 entry_modules/topics, 05 resolve_module/who_knows_topic, 09 helpers and 11, tests per tool): written with Claude Code. Thresholds were checked against the loaded graphs (e.g. duplicate distance 0.15 from measured sandbox distances).
 - M9 Navigator + eval (`agents/navigator.py`, `llm/agent.py`, `scripts/ask.py`, `scripts/eval.py`, eval fields for the sandbox and Bolt entries in `golden_set.yaml`): written with Claude Code. The Navigator itself runs on Gemini `gemini-3.8-flash` with Groq `gpt-oss-120b` as fallback; the eval scores its answers deterministically (no LLM judge).
+- M11 Ask screen (`frontend/`, `POST /ask/stream`, node labels and pending flags in Navigator answers): written with Claude Code.
 - M10 API (`backend/lore/api/`, queries 13 and 14, `ingest/tasks.py`, `scripts/tasks.py`, API tests): written with Claude Code.
 - M6 embeddings (`ingest/embed.py`, `graph/search.py`, queries 02, 09 and 21, `scripts/embed.py`, `scripts/find.py`): written with Claude Code, including the fusion tuning against q01-q04 and s01 (measured ranks are in `queries/02_entry_decisions.cypher`). Embeddings run locally with fastembed (`BAAI/bge-small-en-v1.5`).

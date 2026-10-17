@@ -68,3 +68,20 @@ def test_ask_validates_and_rate_limits(client, monkeypatch):
     assert client.post("/ask", json=body).status_code == 200
     r = client.post("/ask", json=body)
     assert r.status_code == 429 and int(r.headers["Retry-After"]) > 0
+
+
+@needs_graphs
+def test_ask_stream_sends_progress_then_the_answer(client, monkeypatch):
+    import json
+
+    async def fake_ask(question, org, user, mcp_client, session_id=None, on_event=None):
+        on_event({"type": "tool", "n": 1, "tool": "find_entities", "args": {"text": question}})
+        on_event({"type": "llm_done", "step": "write answer", "endpoint": "fake", "seconds": 0.1, "cached": False})
+        return {"question": question, "org": org, "answer": "ok", "labels": {"pr:o/r#1": "a PR"}}
+    monkeypatch.setattr(api, "navigator_ask", fake_ask)
+    monkeypatch.setattr(api, "limiter", RateLimiter(per_minute=5, per_day=10))
+    r = client.post("/ask/stream", json={"org": "FalkorDB", "user": "stream-test", "question": "Who owns build?"})
+    events = [json.loads(line) for line in r.text.splitlines()]
+    assert r.headers["content-type"].startswith("application/x-ndjson")
+    assert [e["type"] for e in events] == ["tool", "llm_done", "answer"]
+    assert events[-1]["data"]["labels"] == {"pr:o/r#1": "a PR"}

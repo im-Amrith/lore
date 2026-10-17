@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* Calm, paper-and-ink palette. One accent (teal) marks the walked path; amber is reserved for
+   pending proposals, a soft rose for "not found". */
+@theme {
+  --color-paper: #f6f4ef;
+  --color-surface: #fffefb;
+  --color-sunk: #efece5;
+  --color-ink: #1c2226;
+  --color-ink-2: #3d474e;
+  --color-muted: #6a747b;
+  --color-line: #e2ddd2;
+  --color-line-strong: #cfc8ba;
+  --color-accent: #0e6e64;
+  --color-accent-ink: #0a524a;
+  --color-accent-soft: #e2f0ec;
+  --color-pending: #9a5a08;
+  --color-pending-soft: #fbf0dd;
+  --color-pending-line: #ecd3a6;
+  --color-miss: #8c3d3d;
+  --color-miss-soft: #f8ecea;
+  --color-miss-line: #ebcdc8;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), "Iowan Old Style", Georgia, serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+/* Thin, quiet scrollbars inside panels. */
+.scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot { animation: none; }
+}

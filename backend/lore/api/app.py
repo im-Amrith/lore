@@ -4,6 +4,7 @@
 
 Routes, one per UI screen (docs/PLAN.md "UI screens"):
   POST /ask                         Navigator answer: citations, subgraph, path, Cypher
+  POST /ask/stream                  the same, streaming the tools and LLM calls as they happen (NDJSON)
   GET  /module/{id}                 owners vs experts, decisions by status, co-changed modules
   GET  /risk                        bus factor per module, bridge people, working groups
   GET  /triage                      triage inbox: Tasks, their issue, draft, related work
@@ -20,6 +21,9 @@ reads the graph carries the Cypher that ran, for the UI's "show query" toggle.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import math
 import re
 import time
 from contextlib import asynccontextmanager
@@ -28,7 +32,7 @@ from typing import Any
 import anyio
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from mcp.client import Client
 from pydantic import BaseModel, Field
 
@@ -121,7 +125,7 @@ def health() -> dict[str, Any]:
             out[o] = {"graph": graph_name(o), "missing": True}
     now = time.time()
     llm = {k: v for k, v in load_state().items() if v.get("until", 0) > now}
-    return {"orgs": out, "llm_endpoints_unavailable": llm}
+    return {"orgs": out, "sandbox_repo": settings.sandbox_repo, "llm_endpoints_unavailable": llm}
 
 
 # ---------------------------------------------------------------- Ask
@@ -135,7 +139,7 @@ class AskIn(BaseModel):
 
 ASK_FIELDS = ("question", "org", "user", "intent", "found", "not_found", "answer", "sentences", "citations",
               "subgraph", "path", "cypher", "tool_calls", "llm_calls", "dropped", "session_id", "seconds",
-              "answer_cache")
+              "answer_cache", "sources", "labels", "decision_status")
 
 
 @app.post("/ask", tags=["ask"], summary="Ask the Navigator (rate-limited per user)",
@@ -143,15 +147,56 @@ ASK_FIELDS = ("question", "org", "user", "intent", "found", "not_found", "answer
                      503: {"description": "Every free-tier LLM endpoint is rate-limited or out of quota"}})
 async def ask(body: AskIn) -> dict[str, Any]:
     org, user = _org(body.org), _user(body.user)
-    if wait := limiter.check(user):
-        return JSONResponse({"detail": f"rate limit: at most {settings.ask_per_minute} questions a minute and "
-                                       f"{settings.ask_per_day} a day per user; retry in {wait:.0f}s"},
-                            status_code=429, headers={"Retry-After": str(int(wait) + 1)})
+    if limited := _limited(user):
+        return limited
     try:
         r = await navigator_ask(body.question, org, user, app.state.mcp, session_id=body.session_id)
     except LLMError as e:
         raise HTTPException(503, f"no LLM available right now: {e}") from e
     return {k: r.get(k) for k in ASK_FIELDS}
+
+
+def _limited(user: str) -> JSONResponse | None:
+    if wait := limiter.check(user):
+        return JSONResponse({"detail": f"rate limit: at most {settings.ask_per_minute} questions a minute and "
+                                       f"{settings.ask_per_day} a day per user; retry in {wait:.0f}s"},
+                            status_code=429, headers={"Retry-After": str(int(wait) + 1)})
+    return None
+
+
+@app.post("/ask/stream", tags=["ask"], summary="Ask, streaming progress as NDJSON (one JSON object per line)",
+          responses={200: {"content": {"application/x-ndjson": {}},
+                           "description": 'Lines: {"type": "tool"|"llm"|"llm_done"|"cache", ...} while the '
+                                          'Navigator works, then {"type": "answer", "data": <same as POST /ask>} '
+                                          'or {"type": "error", "status", "detail"}'}})
+async def ask_stream(body: AskIn):
+    org, user = _org(body.org), _user(body.user)
+    if limited := _limited(user):
+        return limited
+    send, recv = anyio.create_memory_object_stream(max_buffer_size=math.inf)
+
+    async def produce() -> None:
+        with send:
+            try:
+                r = await navigator_ask(body.question, org, user, app.state.mcp, session_id=body.session_id,
+                                        on_event=send.send_nowait)
+                send.send_nowait({"type": "answer", "data": {k: r.get(k) for k in ASK_FIELDS}})
+            except LLMError as e:
+                send.send_nowait({"type": "error", "status": 503, "detail": f"no LLM available right now: {e}"})
+            except Exception as e:  # noqa: BLE001 - reported to the client, not swallowed
+                send.send_nowait({"type": "error", "status": 500, "detail": f"{type(e).__name__}: {e}"})
+
+    async def lines():
+        task = asyncio.create_task(produce())
+        try:
+            with recv:
+                async for event in recv:
+                    yield json.dumps(event, default=str) + "\n"
+        finally:
+            if not task.done():  # the client went away mid-answer
+                task.cancel()
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
 
 
 # ---------------------------------------------------------------- Module page

@@ -33,7 +33,7 @@ import os
 import re
 import sys
 import time
-from typing import Any
+from typing import Any, Callable
 
 import anyio
 from mcp.client import Client
@@ -258,6 +258,9 @@ class _Evidence:
         self.sources: dict[str, str] = {}
         self.cypher: list[dict[str, Any]] = []
         self.first: dict[str, Any] = {}  # find_entities results, for the not-found fallback
+        self.labels: dict[str, str] = {}  # node id -> a short human label (title, statement, login, path)
+        self.decision_status: dict[str, str] = {}  # decision id -> active / proposed / superseded
+        self.pending: set[str] = set()  # proposed decisions and the open/draft PRs they come from
 
     def add(self, tool: str, args: dict[str, Any], env: dict[str, Any] | None, error: str | None) -> None:
         self.calls.append({"tool": tool, "args": args, "error": error})
@@ -273,6 +276,29 @@ class _Evidence:
         self.cypher += [{"tool": tool, **c} for c in env.get("cypher", [])]
         if tool == "find_entities" and not self.first:
             self.first = env.get("results", {})
+        self._walk(env.get("results", {}))
+
+    LABEL_KEYS = ("title", "statement", "person", "login", "path", "module", "name")
+
+    def _walk(self, value: Any) -> None:
+        """Labels and decision statuses from anything in a tool result that carries an id."""
+        if isinstance(value, dict):
+            nid = value.get("id") or value.get("person_id") or value.get("module_id")
+            if isinstance(nid, str) and ":" in nid:
+                label = next((value[k] for k in self.LABEL_KEYS if isinstance(value.get(k), str) and value[k]), None)
+                if label:
+                    self.labels.setdefault(nid, label[:200])
+                if nid.startswith("decision:") and value.get("status"):
+                    self.decision_status[nid] = value["status"]
+                    if value["status"] == "proposed":
+                        self.pending.add(nid)
+                        if value.get("source_id"):
+                            self.pending.add(value["source_id"])
+            for v in value.values():
+                self._walk(v)
+        elif isinstance(value, list):
+            for v in value:
+                self._walk(v)
 
     def resolve(self, cite: str) -> str | None:
         """A cited id (or a URL the model copied) -> an id some tool returned, else None."""
@@ -349,9 +375,14 @@ async def _remember(client: Client, out: dict[str, Any], session_id: str | None)
 
 
 async def ask(question: str, org: str, user: str, client: Client, *, session_id: str | None = None,
-              remember: bool = True, use_cache: bool = True, verbose: bool = False) -> dict[str, Any]:
+              remember: bool = True, use_cache: bool = True, verbose: bool = False,
+              on_event: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
+    """on_event gets progress as it happens (the API streams it to the UI): {"type": "tool",
+    "n", "tool", "args"}, {"type": "llm", "step"}, {"type": "llm_done", "step", "endpoint",
+    "seconds", "cached"}, {"type": "cache"} on an answer-cache hit."""
     started = time.monotonic()
     log = print if verbose else (lambda *a, **k: None)
+    emit = on_event or (lambda e: None)
 
     # The answer cache, keyed on the graph's current data version.
     cache_file = None
@@ -363,6 +394,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
                 out = {**json.loads(cache_file.read_text(encoding="utf-8")), "user": user,
                        "question": question, "session_id": session_id, "answer_cache": True}
                 log(f"  [answer cache] hit {cache_file.name[:12]}")
+                emit({"type": "cache"})
                 if remember:
                     await _remember(client, out, session_id)
                 out["seconds"] = round(time.monotonic() - started, 1)
@@ -372,15 +404,19 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
     tools = llm_tools(await client.list_tools())
     llm_calls: list[dict[str, Any]] = []
 
-    async def chat(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    async def chat(*args: Any, step: str = "", **kwargs: Any) -> dict[str, Any]:
+        emit({"type": "llm", "step": step})
         # The OpenAI client blocks; a worker thread keeps the API's event loop free meanwhile.
         r = await anyio.to_thread.run_sync(lambda: agent_chat(*args, **kwargs))
+        emit({"type": "llm_done", "step": step, "endpoint": r.get("endpoint"), "seconds": r.get("seconds"),
+              "cached": bool(r.get("cached"))})
         llm_calls.append({k: r.get(k) for k in ("model", "endpoint", "prompt_tokens", "seconds", "cached")})
         return r
     ev = _Evidence()
 
     # Step 2: resolve names. Shown to the LLM as its own first tool call.
     args = {"text": question}
+    emit({"type": "tool", "n": 1, "tool": "find_entities", "args": args})
     first = await _call(client, ev, "find_entities", {"org": org, **args})
     log(f"  [tool 1] find_entities {args}")
     used = 1
@@ -418,6 +454,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
                             **({"question": question} if tc["name"] == "trace_decision" else {})}
                     used += 1
                     log(f"  [tool {used}] {tc['name']} {targs}")
+                    emit({"type": "tool", "n": used, "tool": tc["name"], "args": targs})
                     result = await _call(client, ev, tc["name"], full)
             results.append(result)
             messages.append({"role": "tool", "tool_call_id": tc["id"], "content": json.dumps(result, default=str)})
@@ -425,7 +462,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
 
     # Step 3: call 1 picks every tool it needs, in one turn.
     model = ""
-    reply = await chat(messages, tools, use_cache=use_cache)
+    reply = await chat(messages, tools, step="pick tools", use_cache=use_cache)
     model = reply["model"]
     if reply["tool_calls"]:
         results = await run_calls(reply)
@@ -433,13 +470,13 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         if all(_thin(r) for r in results) and used < NAVIGATOR_MAX_TOOL_CALLS:
             messages.append({"role": "user", "content": "Those results are empty. Try other tools or arguments "
                                                         f"(at most {NAVIGATOR_MAX_TOOL_CALLS - used} calls), or call nothing."})
-            reply = await chat(messages, tools, use_cache=use_cache)
+            reply = await chat(messages, tools, step="pick again", use_cache=use_cache)
             if reply["tool_calls"]:
                 await run_calls(reply)
 
     # Step 5: compose from the tool results (no tools offered), then keep only cites a tool returned.
     compose = [{"role": "system", "content": COMPOSE}, *flatten(messages[1:])]
-    reply = await chat(compose, json_schema=ANSWER_SCHEMA, use_cache=use_cache)
+    reply = await chat(compose, json_schema=ANSWER_SCHEMA, step="write answer", use_cache=use_cache)
     model = model or reply["model"]
     parsed = _parse_answer(reply["content"]) or {
         "sentences": [], "found": False, "not_found": "the model returned no readable answer"}
@@ -451,7 +488,9 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         good = list(dict.fromkeys(r for c in raw if (r := ev.resolve(c))))
         bad = [c for c in raw if not ev.resolve(c)]
         if good:
-            sentences.append({"text": s["text"].strip(), "cites": good, **({"rejected_cites": bad} if bad else {})})
+            sentences.append({"text": s["text"].strip(), "cites": good,
+                              "pending": any(c in ev.pending for c in good),  # rests on an unmerged proposal
+                              **({"rejected_cites": bad} if bad else {})})
         else:
             dropped.append({"text": s["text"].strip(), "cites": raw})
     found = bool(parsed.get("found", True)) and bool(sentences)
@@ -477,6 +516,8 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         "subgraph": {"nodes": list(ev.nodes), "edges": list(ev.edges.values())}, "path": path,
         "sources": ev.sources, "cypher": ev.cypher, "tool_calls": ev.calls, "model": model,
         "llm_calls": llm_calls, "session_id": session_id,
+        "labels": {n: ev.labels[n] for n in ev.nodes if n in ev.labels},
+        "decision_status": ev.decision_status,
     }
 
     if cache_file is not None:

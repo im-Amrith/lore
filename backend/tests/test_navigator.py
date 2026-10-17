@@ -156,3 +156,21 @@ def test_normalize_question_and_thin():
     assert nav._thin({"error": "x"}) and nav._thin({"found": False, "decisions": []})
     assert nav._thin({"message": "not found: no module named 'x'", "module": None})
     assert not nav._thin({"experts": [{"id": "person:x"}]})
+
+
+@needs_sandbox
+def test_labels_statuses_pending_and_events(monkeypatch):
+    # The sandbox's PR #11 decision has a draft rival (PR #16): citing it marks the sentence pending.
+    answer = {"intent": "why", "found": True, "not_found": "", "sentences": [
+        {"text": "Links are cached in Redis.", "cites": ["decision:3dd18586343e603b"]},
+        {"text": "A draft PR proposes changing this.", "cites": ["pr:im-Amrith/lore-sandbox#16"]}]}
+    fake = FakeLLM([
+        {"content": "", "tool_calls": [_call(1, "trace_decision", {"node_id": "pr:im-Amrith/lore-sandbox#11"})]},
+        {"content": json.dumps(answer), "tool_calls": []},
+    ])
+    events = []
+    r = _run("Why do we cache links in Redis?", fake, monkeypatch, on_event=events.append)
+    assert [s["pending"] for s in r["sentences"]] == [False, True]
+    assert r["decision_status"]["decision:3dd18586343e603b"] == "active"
+    assert "Redis" in r["labels"]["decision:3dd18586343e603b"]
+    assert [e["type"] for e in events][:2] == ["tool", "llm"] and events[-1]["step"] == "write answer"
