@@ -172,6 +172,21 @@ _URL_ID = [(re.compile(r"^https://github\.com/([^/]+/[^/]+)/pull/(\d+)$"), "pr:{
            (re.compile(r"^https://github\.com/([^/]+/[^/]+)/issues/(\d+)$"), "issue:{}#{}")]
 
 
+# Node ids that leak into a sentence's text (some models write "(decision:fb6a...)" despite the rules).
+# The citations already carry them, so they are cut from the text: a parenthesised id, or a bare one.
+_TEXT_ID = re.compile(r"\s*\((?:decision|doc|chunk|commit|module|person|team):[^)]*\)"
+                      r"|\b(?:decision|chunk|commit):[0-9a-f]{8,}\b")
+
+
+_TEXT_DOC = re.compile(r"\bdoc:[^\s:]+/[^\s:]+:(?:[^\s]*/)?([^\s/]+?)(?=[.,;:]?(?:\s|$))")
+
+
+def strip_ids(text: str) -> str:
+    """Cut leaked node ids from a sentence; a bare doc id becomes its file name."""
+    text = _TEXT_DOC.sub(lambda m: m.group(1), _TEXT_ID.sub("", text))
+    return re.sub(r"\s+([.,;:])", r"\1", text).strip()
+
+
 def classify_intent(question: str) -> str:
     q = " " + question.lower() + " "
     for intent, phrases in INTENT_RULES:
@@ -503,7 +518,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         good = list(dict.fromkeys(r for c in raw if (r := ev.resolve(c))))
         bad = [c for c in raw if not ev.resolve(c)]
         if good:
-            sentences.append({"text": s["text"].strip(), "cites": good,
+            sentences.append({"text": strip_ids(s["text"]), "cites": good,
                               "pending": any(c in ev.pending for c in good),  # rests on an unmerged proposal
                               **({"rejected_cites": bad} if bad else {})})
         else:

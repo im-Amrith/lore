@@ -67,3 +67,10 @@ def test_merged_pr_in_another_repo_is_refused(client):
     r = _post(c, "pull_request", {"action": "closed", "pull_request": {"number": 1, "merged": True},
                                   "repository": {"full_name": "FalkorDB/FalkorDB"}})
     assert r.status_code == 403 and not started
+
+
+def test_leaked_ids_are_cut_from_answer_text():
+    from lore.agents.navigator import strip_ids
+    assert strip_ids("Replaced (decision:fb6a827e08d45e47) in PR #16.") == "Replaced in PR #16."
+    assert strip_ids("See doc:im-Amrith/lore-sandbox:docs/adr/0003-in-process-cache.md.") == "See 0003-in-process-cache.md."
+    assert strip_ids("A 24-hour TTL (see ADR 0001).") == "A 24-hour TTL (see ADR 0001)."
