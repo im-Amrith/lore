@@ -134,7 +134,7 @@ The live demo runs on one AWS EC2 server (Ubuntu 24.04, t3.medium, Elastic IP `1
 
 | Part | Where | URL |
 | --- | --- | --- |
-| Frontend (Next.js) | Vercel | set after `vercel deploy`, see below |
+| Frontend (Next.js) | Vercel (project `lore`) | https://lore-kappa-mauve.vercel.app |
 | Backend API + Steward | EC2, Docker | https://13-237-159-217.sslip.io (docs at `/docs`) |
 | FalkorDB | EC2, Docker, same compose project | not exposed; only the backend reaches it |
 
@@ -160,7 +160,7 @@ Why not a free host: the backend holds the embedding model and lore-mcp in proce
    | Variable | Value |
    | --- | --- |
    | `LORE_DOMAIN` | `13-237-159-217.sslip.io` (Caddy's site address) |
-   | `CORS_ORIGINS` | the Vercel URL, e.g. `https://lore-xyz.vercel.app` (comma-separate several) |
+   | `CORS_ORIGINS` | the Vercel URL: `https://lore-kappa-mauve.vercel.app` (comma-separate several) |
    | `DEMO_ORG` | `FalkorDB` |
    | `SANDBOX_REPO` | `im-Amrith/lore-sandbox` |
    | `GITHUB_TOKEN` | fine-grained token: public read, plus Issues read/write on lore-sandbox only (Steward's poll and the approved comment) |
