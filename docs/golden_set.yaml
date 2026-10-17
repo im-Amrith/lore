@@ -102,9 +102,10 @@ questions:
       Dvir Dukhan (DvirDukhan) is the top expert on graph/src/index (decayed score ~40; he built the native
       numeric index and the CoW B-tree), with Avi Avni (AviAvni) close behind (~27; recent range and vector
       index fixes).
-    must_cite:
-      - https://github.com/FalkorDB/FalkorDB/pull/2350
-      - https://github.com/FalkorDB/FalkorDB/pull/2278
+    # Was must_cite #2350 and #2278. Changed Oct 17 (approved): any PR that is evidence of
+    # DvirDukhan's or AviAvni's work on graph/src/index counts (queries/92_check_evidence_prs.cypher).
+    must_cite: []
+    must_cite_evidence: {persons: ["person:DvirDukhan", "person:AviAvni"], module: "module:FalkorDB:graph/src/index"}
     key_facts: ["DvirDukhan", "AviAvni", "graph/src/index"]
     expected_path: "Person -> EXPERT_IN -> Module graph/src/index (evidence: AUTHORED PRs touching it)"
     checked_on: ""
@@ -122,7 +123,7 @@ questions:
     # Was must_cite #2910 and #3060. Changed Oct 17 (approved): any PR that is evidence of
     # AviAvni's work on graph/src/parser counts; checked by queries/92_check_evidence_prs.cypher.
     must_cite: []
-    must_cite_evidence: {person: "person:AviAvni", module: "module:FalkorDB:graph/src/parser"}
+    must_cite_evidence: {persons: ["person:AviAvni"], module: "module:FalkorDB:graph/src/parser"}
     key_facts: ["AviAvni", "graph/src/parser"]
     expected_path: "Person -> EXPERT_IN -> Module graph/src/parser"
     checked_on: ""
@@ -247,4 +248,6 @@ sandbox:
     question: "Which modules depend on one person?"
     expected: "storage/: every commit is by Marta Silva (the listed owner, <your-login>, has never touched it)."
     must_cite: []
-    key_facts: ["storage", "Marta"]
+    # Passes if storage and Marta Silva are named (Oct 17: every sandbox module has one author,
+    # so an answer listing all of them is correct).
+    key_facts: ["storage", "Marta Silva"]

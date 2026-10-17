@@ -175,8 +175,8 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dim: int = 384
     llm_daily_call_cap: int = 2000
-    # Agents fall back to this model on the fast (Gemini) endpoint after a Groq 429 or tool-call error.
-    llm_fallback_model: str = "gemini-3.8-flash"
+    # The agents' primary model, on the fast (Gemini) endpoint; Groq (LLM_SMART_*) is the fallback.
+    llm_agent_model: str = "gemini-3.8-flash"
 
     github_webhook_secret: str = ""
     # Signs triage approvals: the UI mints a token for (issue, exact draft) when a human clicks

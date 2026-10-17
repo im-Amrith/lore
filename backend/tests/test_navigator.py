@@ -22,12 +22,18 @@ def test_classify_intent():
     assert nav.classify_intent("Tell me about FalkorDB") == "general"
 
 
-def test_compact_drops_noise_caps_lists_and_turns_urls_into_ids():
-    out = nav.compact({"experts": [{"score": 42.86305, "source_url": "x", "parity": False,
-                                    "evidence": ["https://github.com/FalkorDB/FalkorDB/pull/2350"] * 5}] * 12})
-    assert len(out["experts"]) == 11 and out["experts"][-1] == "... 2 more"
-    e = out["experts"][0]
-    assert e == {"score": 42.9, "evidence": ["pr:FalkorDB/FalkorDB#2350"] * 5}
+def test_compact_drops_noise_caps_lists_and_shortens_names():
+    pr = "https://github.com/FalkorDB/FalkorDB/pull/2350"
+    out = nav.compact({"listed_owner": False, "experts": [
+        {"person_id": "person:x", "score": 42.86305, "source_url": "x", "parity": False, "last_touch": 1,
+         "evidence": [pr] * 5}] * 12})
+    assert out["listed_owner"] is False  # a meaningful false is kept; parity false is dropped
+    assert len(out["experts"]) == 6 and out["experts"][-1] == "+7 more"  # top 5 people
+    assert out["experts"][0] == {"id": "person:x", "score": 42.9,
+                                 "prs": ["pr:FalkorDB/FalkorDB#2350"] * 3 + ["+2 more"]}  # top 3 PRs, ids not URLs
+    traced = nav.compact({"decisions": [{"statement": "s", "issues": [{"id": f"issue:o/r#{i}"} for i in range(9)]}]})
+    assert len(traced["decisions"][0]["issues"]) == 7  # the 6 query 03 ranked, + "+3 more"
+    assert traced["decisions"][0]["stmt"] == "s"
 
 
 def test_evidence_resolves_ids_and_urls_only_if_a_tool_returned_them():

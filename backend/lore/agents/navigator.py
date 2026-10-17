@@ -24,6 +24,7 @@ import json
 import os
 import re
 import sys
+import time
 from typing import Any
 
 import anyio
@@ -64,8 +65,10 @@ How to work:
   impact: impact_radius. What changed / my past questions: recall.
 - If the result doesn't answer the question, you may call another tool. At most {left} more tool calls.
 - When the results are enough (or nothing more can help), stop calling tools and reply: done.
-
-{rules}"""
+  The answer is written in the next step; it must cite ids from the results, so fetch the
+  evidence it needs (experts' PRs, the decision's sources) rather than guessing.
+- Tool results use short field names: stmt = decision statement, why = rationale, src = where
+  it was decided, prs = evidence PRs, ids = person ids."""
 
 ANSWER_RULES = """Answer rules:
 - Use only facts in the tool results. Never add outside knowledge.
@@ -82,13 +85,25 @@ ANSWER_RULES = """Answer rules:
 - `decisions` are current. A `pending_proposals` entry is never current: say "a draft PR proposes
   changing this; it is not merged". `history` is superseded: say so and say what replaced it.
   A decision with "parity": true was chosen to match the C engine (or openCypher): say so.
-- Name people by login (and name when given). Quote scores and shares as given, rounded.
-- For owns questions say whether CODEOWNERS lists an owner; if listed_owner is false, say
-  "no owner is listed in CODEOWNERS", then who actually does the work.
+- Why questions: the first sentence states the decision in the words of its statement (stmt),
+  keeping its key terms (e.g. "native-deps crate", "content-addressed cache", "fold", "delta").
+- Who, owns and risk questions: always write the exact module path (graph/src/index, analytics,
+  storage) in the text, and name the people who actually do the work (the experts), including
+  commit-only authors without a GitHub login (ids like person:name:priya-raman): write their
+  name as given (Priya Raman). Name people with a login by login (and name when given). Quote
+  scores and shares as given, rounded.
+- Owns questions: say whether CODEOWNERS lists an owner; if listed_owner is false, say
+  "no owner is listed in CODEOWNERS". Then say who actually does the work, and if the listed
+  owner is not among the experts (paper owner), say so.
+- Risk questions: for each single-expert module, write its path and name its single expert.
 - If no result answers the question (e.g. the matching PR has no recorded decision or reason),
   set found to false, say what is missing in not_found, and use sentences only for the nearest
   evidence (what the PR or issue did), never a guessed reason.
-- 2 to 6 sentences."""
+- 2 to 6 sentences.
+
+Tool results use short field names: stmt = decision statement, why = rationale, rejected =
+alternatives considered, src = the PR / issue / doc it was decided in, prs = evidence PRs,
+reviewed = PRs reviewed, share = % share, ids = person ids (same order as experts)."""
 
 COMPOSE = """Write the final answer to the question now, as JSON: intent (why, who-knows, owns, risk,
 impact, onboarding, changed or general), found, not_found ("" when found), and sentences, each
@@ -108,13 +123,28 @@ ANSWER_SCHEMA = {"type": "object", "additionalProperties": False,
                          "properties": {"text": {"type": "string"},
                                         "cites": {"type": "array", "items": {"type": "string"}}}}}}}
 
-# What the LLM sees of a tool result: results only (no cypher, node or edge lists), long strings
-# cut, lists capped (tighter when nested), URLs replaced by node ids. impact_radius on the
-# parser is ~60K characters raw and ~5K after this.
-DROP_KEYS = {"source_url", "url", "rank", "distance", "activity", "confidence", "thresholds", "valid_from",
-             "valid_to", "evidence_commits", "share_pct_raw"}
-MAX_STR = 400
-MAX_LIST = (10, 6, 3)  # by nesting depth of the list: top-level, inside one list, deeper
+# What the LLM sees of a tool result (the full envelope still goes to the UI and the eval):
+# results only (no Cypher, embeddings, node or edge lists), noise fields dropped, field names
+# shortened, URLs replaced by node ids, strings cut, and lists capped by what they hold. Every
+# call stays under ~4K tokens (impact_radius on the parser: ~60K characters raw).
+DROP_KEYS = {"source_url", "url", "codeowners_url", "rank", "distance", "activity", "confidence", "thresholds",
+             "valid_from", "valid_to", "evidence_commits", "last_touch", "authored", "kind", "members", "repo",
+             "module_commits", "total_score", "other_matches", "since", "via", "rels", "links_back", "label",
+             "number", "member_ids", "sources", "term", "doc_id", "would_change", "shared_topics",
+             "shared_modules", "source_draft", "source_state", "embedding", "cypher", "nodes", "edges"}
+RENAME = {"statement": "stmt", "rationale": "why", "alternatives": "rejected", "source_id": "src",
+          "person_id": "id", "module_id": "id", "person": "who", "evidence": "prs",
+          "evidence_reviews": "reviewed", "share_pct": "share", "expert_ids": "ids"}
+LIST_CAPS = {"experts": 5, "active_experts": 5, "bridge_people": 5, "owners": 5, "people": 6,
+             "evidence": 3, "evidence_reviews": 2, "issues": 3, "similar_issues": 5, "decisions": 4,
+             "pending_proposals": 3, "history": 3, "co_changed": 5, "modules": 12, "working_groups": 3,
+             "docs": 3, "prs": 4, "alternatives": 3, "questions": 5, "changes": 5}
+# Inside a list item: the decisions under each co-changed module get 2; the issues linked to a
+# traced decision keep the 6 query 03 ranked (top-level find_entities issues get 3).
+NESTED_LIST_CAPS = {"decisions": 2, "pending_proposals": 2, "history": 2, "issues": 6}
+DEFAULT_LIST_CAP = 6
+MAX_STR = 300
+STR_CAPS = {"snippet": 160, "title": 120}
 
 _URL_ID = [(re.compile(r"^https://github\.com/([^/]+/[^/]+)/pull/(\d+)$"), "pr:{}#{}"),
            (re.compile(r"^https://github\.com/([^/]+/[^/]+)/issues/(\d+)$"), "issue:{}#{}")]
@@ -135,25 +165,28 @@ def _url_to_id(s: str) -> str:
     return s
 
 
-def compact(value: Any, depth: int = 0) -> Any:
+def compact(value: Any, key: str = "", nested: bool = False) -> Any:
+    """A tool result as the LLM sees it. key is the field holding value; nested is True inside
+    a list item, where lists of decisions get NESTED_LIST_CAP instead of their own cap."""
     if isinstance(value, dict):
         out = {}
         for k, v in value.items():
             if k in DROP_KEYS or v is None or v == [] or v == "" or (k == "parity" and v is False):
                 continue
-            out[k] = compact(v, depth)
+            out[RENAME.get(k, k)] = compact(v, k, nested)
         return out
     if isinstance(value, list):
-        cap = MAX_LIST[min(depth, len(MAX_LIST) - 1)]
-        items = [compact(v, depth + 1) for v in value[:cap]]
+        cap = (nested and NESTED_LIST_CAPS.get(key)) or LIST_CAPS.get(key, DEFAULT_LIST_CAP)
+        items = [compact(v, key, True) for v in value[:cap]]
         if len(value) > cap:
-            items.append(f"... {len(value) - cap} more")
+            items.append(f"+{len(value) - cap} more")
         return items
     if isinstance(value, float):
         return round(value, 1)
     if isinstance(value, str):
         value = _url_to_id(value)
-        return value if len(value) <= MAX_STR else value[:MAX_STR] + "..."
+        cap = STR_CAPS.get(key, MAX_STR)
+        return value if len(value) <= cap else value[:cap] + "..."
     return value
 
 
@@ -163,13 +196,27 @@ def server_params() -> StdioServerParameters:
                                  env={**os.environ, "PYTHONPATH": str(BACKEND_DIR)})
 
 
+def _slim(schema: Any) -> Any:
+    """Drop pydantic's per-field titles and null defaults; anyOf [X, null] -> X. ~400 tokens a call."""
+    if isinstance(schema, dict):
+        if "anyOf" in schema:
+            kinds = [k for k in schema["anyOf"] if k.get("type") != "null"]
+            if len(kinds) == 1:
+                schema = {**{k: v for k, v in schema.items() if k != "anyOf"}, **kinds[0]}
+        return {k: _slim(v) for k, v in schema.items()
+                if k != "title" and not (k == "default" and schema[k] is None)}
+    if isinstance(schema, list):
+        return [_slim(x) for x in schema]
+    return schema
+
+
 def llm_tools(listed: Any) -> list[dict[str, Any]]:
     """MCP tool list -> OpenAI tool schemas, minus the args code fills in."""
     out = []
     for t in listed.tools:
         if t.name not in AGENT_TOOLS:
             continue
-        schema = copy.deepcopy(t.input_schema)
+        schema = _slim(copy.deepcopy(t.input_schema))
         for k in HIDDEN_ARGS:
             schema.get("properties", {}).pop(k, None)
         schema["required"] = [r for r in schema.get("required", []) if r not in HIDDEN_ARGS]
@@ -253,8 +300,15 @@ def _nearest(ev: _Evidence) -> list[dict[str, Any]]:
 
 async def ask(question: str, org: str, user: str, client: Client, *, session_id: str | None = None,
               remember: bool = True, use_cache: bool = True, verbose: bool = False) -> dict[str, Any]:
+    started = time.monotonic()
     intent = classify_intent(question)
     tools = llm_tools(await client.list_tools())
+    llm_calls: list[dict[str, Any]] = []
+
+    def chat(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        r = agent_chat(*args, **kwargs)
+        llm_calls.append({k: r.get(k) for k in ("model", "prompt_tokens", "seconds", "cached")})
+        return r
     ev = _Evidence()
     log = print if verbose else (lambda *a, **k: None)
 
@@ -265,7 +319,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
     used = 1
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM.format(org=org, intent=intent, tool=INTENT_TOOL[intent],
-                                                    left=NAVIGATOR_MAX_TOOL_CALLS - 1, rules=ANSWER_RULES)},
+                                                    left=NAVIGATOR_MAX_TOOL_CALLS - 1)},
         {"role": "user", "content": question},
         {"role": "assistant", "content": "", "tool_calls": [
             {"id": "call_0", "type": "function", "function": {"name": "find_entities", "arguments": json.dumps(args)}}]},
@@ -275,7 +329,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
     # Steps 3-4: the LLM picks tools until it stops asking or the budget is spent.
     model = ""
     while used < NAVIGATOR_MAX_TOOL_CALLS:
-        reply = agent_chat(messages, tools, use_cache=use_cache)
+        reply = chat(messages, tools, use_cache=use_cache)
         model = reply["model"]
         if not reply["tool_calls"]:
             break
@@ -305,7 +359,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
 
     # Step 5: compose from the tool results (no tools offered), then keep only cites a tool returned.
     compose = [{"role": "system", "content": COMPOSE}, *flatten(messages[1:])]
-    reply = agent_chat(compose, json_schema=ANSWER_SCHEMA, use_cache=use_cache)
+    reply = chat(compose, json_schema=ANSWER_SCHEMA, use_cache=use_cache)
     model = model or reply["model"]
     parsed = _parse_answer(reply["content"]) or {
         "sentences": [], "found": False, "not_found": "the model returned no readable answer"}
@@ -341,7 +395,8 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         "intent_rule": intent, "found": found, "not_found": not_found if not found else "",
         "answer": text, "sentences": sentences, "dropped": dropped, "citations": citations,
         "subgraph": {"nodes": list(ev.nodes), "edges": list(ev.edges.values())}, "path": path,
-        "sources": ev.sources, "cypher": ev.cypher, "tool_calls": ev.calls, "model": model, "session_id": session_id,
+        "sources": ev.sources, "cypher": ev.cypher, "tool_calls": ev.calls, "model": model,
+        "llm_calls": llm_calls, "session_id": session_id,
     }
 
     # Step 7: memory, through MCP like every other graph access.
@@ -354,6 +409,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
             res = r.structured_content["results"]
             out["session_id"] = res["session_id"]
             out["memory"] = {k: res[k] for k in ("question_id", "answer_id", "cited")}
+    out["seconds"] = round(time.monotonic() - started, 1)
     return out
 
 

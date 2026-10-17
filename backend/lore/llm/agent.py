@@ -1,15 +1,20 @@
-"""Tool-calling chat for the agents: Groq (role "smart") first, Gemini as the fallback.
+"""Tool-calling chat for the agents: Gemini (LLM_AGENT_MODEL on the fast endpoint) first, Groq
+(role "smart") as the fallback.
 
-    agent_chat(messages, tools, tool_choice) -> {"content", "tool_calls": [{id, name, arguments}], "model"}
+    agent_chat(messages, tools, tool_choice) -> {"content", "tool_calls": [{id, name, arguments}],
+                                                 "model", "prompt_tokens", "seconds"}
 
-On a 429 or a failed tool call (Groq answers 400 "tool_use_failed" when the model writes a
-malformed call), the request is retried once on Groq, then sent to LLM_FALLBACK_MODEL on the
-fast (Gemini) endpoint. Responses are cached on disk keyed by model + messages + tools, so
-re-running the eval replays the same answers for free; a changed tool result changes the
-messages and misses the cache. Uncached requests count against LLM_DAILY_CALL_CAP (kind "agent").
+Why Gemini first: Groq's free tier allows 8,000 tokens a minute and one question needs two or
+three calls of 2-4K tokens, so Groq stalls a live demo on 429s. On a 429, a 5xx, a timeout, an
+empty answer or a failed tool call (Groq answers 400 "tool_use_failed" when the model writes a
+malformed call), the request is retried once, then sent to the next endpoint; a 413 (request
+too large) goes straight to the next one. Responses are cached on disk keyed by model + messages
++ tools, so re-running the eval replays the same answers for free; a changed tool result
+changes the messages and misses the cache. Uncached requests count against LLM_DAILY_CALL_CAP
+(kind "agent").
 
-Gemini 3 rejects replayed tool calls that lack its own thought_signature, so for the fallback
-the earlier tool calls and results are flattened into plain text turns (flatten).
+Gemini 3 rejects replayed tool calls that lack its own thought_signature, so for Gemini the
+earlier tool calls and results are sent as plain text turns (flatten).
 """
 
 from __future__ import annotations
@@ -25,15 +30,19 @@ from lore.config import get_settings
 from lore.llm.cache import cache_get, cache_key, cache_put, count_call
 from lore.llm.chat import LLMError, _client, _retry_after, role_config
 
-RETRY_WAIT_MAX = 60.0  # seconds to wait on a 429 before the one retry (Groq free tier: 8K tokens/min)
+RETRY_WAIT_MAX = 60.0  # seconds to wait on a 429 before the one retry; longer = a daily limit
 
 
 def _endpoints() -> list[tuple[str, str, str, str]]:
     """(label, base_url, api_key, model) in the order they are tried."""
     s = get_settings()
-    out = [("groq", *role_config("smart"))]
-    if s.llm_fast_api_key and s.llm_fallback_model:
-        out.append(("gemini", s.llm_fast_base_url, s.llm_fast_api_key, s.llm_fallback_model))
+    out = []
+    if s.llm_fast_api_key and s.llm_agent_model:
+        out.append(("gemini", s.llm_fast_base_url, s.llm_fast_api_key, s.llm_agent_model))
+    if s.llm_smart_api_key and s.llm_smart_model:
+        out.append(("groq", *role_config("smart")))
+    if not out:
+        raise LLMError("no agent LLM configured: set LLM_FAST_API_KEY (+ LLM_AGENT_MODEL) or LLM_SMART_*")
     return out
 
 
@@ -82,7 +91,9 @@ def _message(resp: Any) -> dict[str, Any]:
     m = resp.choices[0].message
     calls = [{"id": tc.id, "name": tc.function.name, "arguments": tc.function.arguments or "{}"}
              for tc in (m.tool_calls or [])]
-    return {"content": m.content or "", "tool_calls": calls}
+    usage = getattr(resp, "usage", None)
+    return {"content": m.content or "", "tool_calls": calls,
+            "prompt_tokens": getattr(usage, "prompt_tokens", None)}
 
 
 def agent_chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
@@ -93,7 +104,7 @@ def agent_chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | Non
         key = cache_key(model, json.dumps({"tools": tools, "tool_choice": tool_choice, "schema": json_schema},
                                           sort_keys=True), messages)
         if use_cache and (hit := cache_get("agent", key)) is not None:
-            return hit
+            return {**hit, "cached": True}
         kwargs: dict[str, Any] = {"model": model, "temperature": 0,
                                   "messages": flatten(messages) if label == "gemini" else messages}
         if tools:
@@ -105,21 +116,26 @@ def agent_chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | Non
             kwargs["reasoning_effort"] = "low"
         for attempt in range(2):  # one try + one retry, then the next endpoint
             count_call("agent")
+            t0 = time.monotonic()
             try:
-                out = {**_message(_client(base_url, api_key).chat.completions.create(**kwargs)), "model": model}
+                resp = _client(base_url, api_key).chat.completions.create(**kwargs)
+                out = {**_message(resp), "model": model, "seconds": round(time.monotonic() - t0, 1)}
                 if json_schema and not out["content"].strip():
                     raise EmptyReply(f"{model} returned an empty answer")
                 cache_put("agent", key, out, {"model": model, "at": int(time.time())})
                 return out
-            except Exception as e:  # noqa: BLE001 - filtered by _retryable
-                if not _retryable(e):
-                    raise
+            except Exception as e:  # noqa: BLE001 - filtered below
                 last_err = e
-                print(f"    [agent llm] {label} {type(e).__name__}: {str(e)[:300]}"
-                      f"{' (retrying)' if attempt == 0 else ' (falling back)'}", flush=True)
+                too_large = isinstance(e, openai.APIStatusError) and e.status_code == 413
+                if not (too_large or _retryable(e)):
+                    raise
+                next_step = "next endpoint" if too_large or attempt == 1 else "retrying"
+                print(f"    [agent llm] {label} {type(e).__name__}: {str(e)[:200]} ({next_step})", flush=True)
+                if too_large:
+                    break
                 if attempt == 0 and isinstance(e, openai.RateLimitError):
                     wait = _retry_after(e) or _wait_hint(e) or 10.0
-                    if wait > RETRY_WAIT_MAX:  # a daily limit: don't wait, fall back now
+                    if wait > RETRY_WAIT_MAX:
                         break
                     time.sleep(wait + 1)
     raise LLMError(f"agent call failed on every endpoint: {last_err}")

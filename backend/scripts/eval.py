@@ -82,7 +82,7 @@ def score(case: dict, r: dict) -> dict:
     if ev := case.get("must_cite_evidence"):
         urls = [c["url"] for c in r["citations"] if c["url"] and "/pull/" in c["url"]]
         hits = ro_query(get_graph(case["org"]), "check_evidence_prs", {**ev, "urls": urls})[0]["urls"] if urls else []
-        musts = [*musts, f"any evidence PR of {ev['person']} on {ev['module']}"]
+        musts = [*musts, f"any evidence PR of {' or '.join(ev['persons'])} on {ev['module']}"]
         if not hits:
             missing_cites.append(musts[-1])
     facts = case.get("key_facts") or []
@@ -99,6 +99,22 @@ def score(case: dict, r: dict) -> dict:
     }
 
 
+def max_prompt(r: dict) -> int | None:
+    return max((c["prompt_tokens"] or 0 for c in r.get("llm_calls", [])), default=None)
+
+
+def timing_line(rows: list) -> str:
+    """Average answer time over questions whose LLM calls were all fresh (cached ones are instant)."""
+    done = [r for _, r, _, _ in rows if r]
+    fresh = [r for r in done if r["llm_calls"] and not any(c.get("cached") for c in r["llm_calls"])]
+    models = sorted({c["model"] for r in done for c in r["llm_calls"]})
+    toks = [t for r in done if (t := max_prompt(r))]
+    avg = (f"{sum(r['seconds'] for r in fresh) / len(fresh):.1f} s over {len(fresh)} uncached answers" if fresh
+           else "n/a (all answers came from the LLM cache)")
+    return (f"Average answer time: {avg}. Largest prompt: {max(toks) if toks else 'n/a'} tokens. "
+            f"Models used: {', '.join(models)}.")
+
+
 def write_report(rows: list[tuple[dict, dict | None, dict | None, str | None]], started: str) -> None:
     golden = [x for x in rows if x[0]["id"].startswith("q")]
     passed_q = sum(1 for _, _, s, _ in golden if s and s["pass"])
@@ -109,12 +125,13 @@ def write_report(rows: list[tuple[dict, dict | None, dict | None, str | None]], 
         "every must_cite URL cited, every key fact mentioned, every shown sentence cited "
         "(and, for not-found tests, the answer says so). See the script's docstring.", "",
         f"**Golden q01-q10: {passed_q} of {len(golden)} pass. All checks: {passed} of {len(rows)}.**", "",
-        "| id | type | pass | must_cite | key facts | tools | dropped | notes |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        timing_line(rows), "",
+        "| id | type | pass | must_cite | key facts | tools | dropped | secs | max prompt tok | notes |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for case, r, s, err in rows:
         if err:
-            lines.append(f"| {case['id']} | {case.get('type', '')} | ERROR | | | | | {err[:120]} |")
+            lines.append(f"| {case['id']} | {case.get('type', '')} | ERROR | | | | | | | {err[:120]} |")
             continue
         notes = []
         for u, got in s["missing_cites"]:
@@ -127,7 +144,7 @@ def write_report(rows: list[tuple[dict, dict | None, dict | None, str | None]], 
         tools = ", ".join(c["tool"] for c in r["tool_calls"])
         lines.append(f"| {case['id']} | {case.get('type', '')} | {'PASS' if s['pass'] else 'FAIL'} | "
                      f"{s['cites_hit']}/{s['cites_total']} | {s['facts_hit']}/{s['facts_total']} | {tools} | "
-                     f"{len(r['dropped'])} | {'; '.join(notes)} |")
+                     f"{len(r['dropped'])} | {r['seconds']} | {max_prompt(r) or ''} | {'; '.join(notes)} |")
     lines += ["", "## Answers", ""]
     for case, r, s, err in rows:
         lines += [f"### {case['id']}: {case['question']}", ""]
@@ -160,8 +177,9 @@ async def run(only: list[str] | None, use_cache: bool, remember: bool) -> list:
                 rows.append((case, None, None, f"{type(e).__name__}: {e}"))
                 continue
             s = score(case, r)
-            print(f"   {'PASS' if s['pass'] else 'FAIL'} {s['checks']} ({time.time() - t0:.0f}s)\n   {r['answer']}",
-                  flush=True)
+            print(f"   {'PASS' if s['pass'] else 'FAIL'} {s['checks']} ({time.time() - t0:.0f}s, "
+                  f"llm {[(c['model'], c['prompt_tokens'], c['seconds']) for c in r['llm_calls']]})\n"
+                  f"   {r['answer']}", flush=True)
             rows.append((case, r, s, None))
     return rows
 
@@ -178,6 +196,7 @@ def main() -> None:
     if not a.only:
         write_report(rows, started)
         print(f"\nwrote {OUT}")
+    print(timing_line(rows))
     golden = [s for c, _, s, _ in rows if c["id"].startswith("q")]
     print(f"golden: {sum(1 for s in golden if s and s['pass'])} of {len(golden)} pass; "
           f"all: {sum(1 for _, _, s, _ in rows if s and s['pass'])} of {len(rows)}")
