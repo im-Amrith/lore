@@ -1,0 +1,323 @@
+"""Lore's HTTP API (FastAPI). OpenAPI docs at /docs.
+
+    uv run --directory backend uvicorn lore.api.app:app --port 8000
+
+Routes, one per UI screen (docs/PLAN.md "UI screens"):
+  POST /ask                         Navigator answer: citations, subgraph, path, Cypher
+  GET  /module/{id}                 owners vs experts, decisions by status, co-changed modules
+  GET  /risk                        bus factor per module, bridge people, working groups
+  GET  /triage                      triage inbox: Tasks, their issue, draft, related work
+  POST /triage/{task}/approve       approve a draft: post_triage (sandbox only), Task -> approved
+  GET  /memory/{user}               past questions and what changed since
+  GET  /users, POST /users          username picker (no passwords)
+  GET  /health                      graphs, data versions, LLM endpoint states
+
+/ask and the approve route go through lore-mcp (an in-process MCP session opened at startup:
+the same server and protocol as stdio, without a second process loading the embedding model).
+The read-only screens call the same named-query tool functions directly. Every response that
+reads the graph carries the Cypher that ran, for the UI's "show query" toggle.
+"""
+
+from __future__ import annotations
+
+import re
+import time
+from contextlib import asynccontextmanager
+from typing import Any
+
+import anyio
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
+from mcp.client import Client
+from pydantic import BaseModel, Field
+
+from lore.agents.navigator import ask as navigator_ask
+from lore.api.ratelimit import RateLimiter
+from lore.config import DECISION_MIN_CONFIDENCE, get_settings, graph_name
+from lore.graph.client import get_db, get_graph, query, ro_query
+from lore.graph.queries import load_query
+from lore.llm.agent import load_state
+from lore.llm.chat import LLMError
+from lore.mcp_server import tools
+from lore.mcp_server.server import mcp
+from lore.safety import make_approval_token
+
+USER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$")
+
+
+def orgs() -> list[str]:
+    """The orgs the API serves: the demo org and the sandbox repo's owner."""
+    s = get_settings()
+    out = [s.demo_org]
+    if s.sandbox_repo:
+        out.append(s.sandbox_repo.split("/")[0])
+    return list(dict.fromkeys(out))
+
+
+def _org(org: str | None) -> str:
+    """A known org, matched case-insensitively; 404 otherwise."""
+    if org is None:
+        return orgs()[0]
+    for o in orgs():
+        if o.lower() == org.lower():
+            return o
+    raise HTTPException(404, f"unknown org {org!r}; this API serves {orgs()}")
+
+
+def _user(user: str) -> str:
+    if not USER_ID.match(user or ""):
+        raise HTTPException(422, "user: 1-40 characters, letters, digits, '.', '_' or '-', starting with a letter or digit")
+    return user
+
+
+def _run(fn, *args: Any) -> dict[str, Any]:
+    """A tool function; its expected failures (unknown org/module, bad argument) become 404/400."""
+    try:
+        return fn(*args)
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(404 if "no graph" in str(e) or "not found" in str(e) else 400, str(e)) from e
+
+
+def _cypher(*envelopes: dict[str, Any], extra: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    return [{"tool": e["tool"], **c} for e in envelopes for c in e["cypher"]] + (extra or [])
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with Client(mcp) as client:
+        app.state.mcp = client
+        yield
+
+
+settings = get_settings()
+app = FastAPI(
+    title="Lore API",
+    version="0.1.0",
+    description="Who owns this, who knows this and why was this decided: answers traced through a "
+                "GitHub org's history in FalkorDB. Every graph answer includes the Cypher that ran.",
+    lifespan=lifespan,
+)
+app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+                   allow_methods=["GET", "POST"], allow_headers=["*"])
+limiter = RateLimiter(settings.ask_per_minute, settings.ask_per_day)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse("/docs")
+
+
+@app.get("/health", tags=["meta"], summary="Graphs, data versions and LLM endpoint states")
+def health() -> dict[str, Any]:
+    graphs = set(get_db().list_graphs())
+    out = {}
+    for o in orgs():
+        if graph_name(o) in graphs:
+            out[o] = {"graph": graph_name(o), "data_version": tools.data_version(o)["results"]["version"]}
+        else:
+            out[o] = {"graph": graph_name(o), "missing": True}
+    now = time.time()
+    llm = {k: v for k, v in load_state().items() if v.get("until", 0) > now}
+    return {"orgs": out, "llm_endpoints_unavailable": llm}
+
+
+# ---------------------------------------------------------------- Ask
+
+class AskIn(BaseModel):
+    org: str = Field(examples=["FalkorDB"])
+    user: str = Field(examples=["amrith"])
+    question: str = Field(min_length=3, max_length=500, examples=["Who knows the Cypher parser?"])
+    session_id: str | None = None
+
+
+ASK_FIELDS = ("question", "org", "user", "intent", "found", "not_found", "answer", "sentences", "citations",
+              "subgraph", "path", "cypher", "tool_calls", "llm_calls", "dropped", "session_id", "seconds",
+              "answer_cache")
+
+
+@app.post("/ask", tags=["ask"], summary="Ask the Navigator (rate-limited per user)",
+          responses={429: {"description": "Too many questions from this user"},
+                     503: {"description": "Every free-tier LLM endpoint is rate-limited or out of quota"}})
+async def ask(body: AskIn) -> dict[str, Any]:
+    org, user = _org(body.org), _user(body.user)
+    if wait := limiter.check(user):
+        return JSONResponse({"detail": f"rate limit: at most {settings.ask_per_minute} questions a minute and "
+                                       f"{settings.ask_per_day} a day per user; retry in {wait:.0f}s"},
+                            status_code=429, headers={"Retry-After": str(int(wait) + 1)})
+    try:
+        r = await navigator_ask(body.question, org, user, app.state.mcp, session_id=body.session_id)
+    except LLMError as e:
+        raise HTTPException(503, f"no LLM available right now: {e}") from e
+    return {k: r.get(k) for k in ASK_FIELDS}
+
+
+# ---------------------------------------------------------------- Module page
+
+@app.get("/module/{module_id:path}", tags=["screens"],
+         summary="Module page: owners vs experts, decisions by status, co-changed modules")
+def module(module_id: str, org: str | None = Query(None, description="default: the sandbox org for "
+                                                                       "sandbox modules, else the demo org")) -> dict[str, Any]:
+    """module_id: an id (module:FalkorDB:graph/src/index), a path (graph/src/index) or a last segment (index)."""
+    if org is None:
+        sandbox_repo = settings.sandbox_repo.split("/")[-1]
+        org = orgs()[-1] if sandbox_repo and module_id.startswith(f"module:{sandbox_repo}:") else orgs()[0]
+    org = _org(org)
+    owners = _run(tools.module_owners, org, module_id)
+    m = owners["results"]["module"]
+    if not m:
+        raise HTTPException(404, owners["results"].get("message", f"no module {module_id!r}"))
+    experts = _run(tools.find_experts, org, m["id"])
+    impact = _run(tools.impact_radius, org, m["id"])
+    params = {"modules": [m["id"]], "min_confidence": DECISION_MIN_CONFIDENCE, "limit": 30}
+    rows = ro_query(get_graph(org), "module_decisions", params)
+    decisions = tools._split([tools._decision(r) for r in rows])
+    co_changed = [{**{k: v for k, v in c.items() if k != "decisions"}, "decisions": c["decisions"][:3]}
+                  for c in impact["results"]["co_changed"]]
+    return {
+        "org": org, "module": m,
+        "owners": {k: owners["results"][k] for k in ("listed_owner", "owners", "paper_owners", "active_experts",
+                                                     "top_expert_is_owner", "mismatch", "codeowners_url")
+                   } | ({"message": owners["results"]["message"]} if "message" in owners["results"] else {}),
+        "experts": experts["results"]["experts"],
+        "decisions": decisions,
+        "co_changed": co_changed,
+        "sources": {**owners["sources"], **experts["sources"], **impact["sources"]},
+        "cypher": _cypher(owners, experts, impact, extra=[{"tool": "module_page", "query": "module_decisions",
+                                                             "cypher": load_query("module_decisions"),
+                                                             "params": params, "rows": len(rows)}]),
+    }
+
+
+# ---------------------------------------------------------------- Knowledge-risk map
+
+@app.get("/risk", tags=["screens"], summary="Knowledge risk: bus factor per module, bridge people, working groups")
+def risk(org: str | None = None, repo: str | None = Query(None, description="limit modules to one repo")) -> dict[str, Any]:
+    org = _org(org)
+    env = _run(tools.knowledge_risk, org, repo)
+    return {"org": org, **env["results"], "cypher": _cypher(env)}
+
+
+# ---------------------------------------------------------------- Triage inbox
+
+def _sandbox_org() -> str:
+    if not settings.sandbox_repo:
+        raise HTTPException(503, "SANDBOX_REPO is not set")
+    return _org(settings.sandbox_repo.split("/")[0])
+
+
+def _task_id(task: str) -> str:
+    """'9', 'issue:<repo>#9' or a full task id -> the full task id."""
+    if task.isdigit():
+        return f"task:triage:issue:{settings.sandbox_repo}#{task}"
+    return task if task.startswith("task:") else f"task:triage:{task}"
+
+
+@app.get("/triage", tags=["triage"], summary="Triage inbox: Tasks with their issue, draft and related work")
+def triage(status: str = Query("", description="open, claimed, drafted, approved; empty = all"),
+           preview: bool = Query(True, description="add related work (similar issues, decisions) per issue"),
+           limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+    org = _sandbox_org()
+    params = {"status": status, "limit": limit}
+    items = ro_query(get_graph(org), "triage_inbox", params)
+    cypher = [{"tool": "triage", "query": "triage_inbox", "cypher": load_query("triage_inbox"), "params": params,
+               "rows": len(items)}]
+    for item in items:
+        if preview and item["status"] != "approved":
+            env = _run(tools.related_work, org, item["issue_id"], None, 3)
+            r = env["results"]
+            item["related"] = {"similar_issues": r["similar_issues"], "duplicate_candidates": r["duplicate_candidates"],
+                               "modules": r["modules"], "decisions": r["decisions"][:3],
+                               "pending_proposals": r["pending_proposals"][:2]}
+            cypher += _cypher(env)
+    return {"org": org, "repo": settings.sandbox_repo, "items": items, "cypher": cypher}
+
+
+class ApproveIn(BaseModel):
+    user: str = Field(examples=["amrith"])
+    draft: str | None = Field(None, max_length=4000,
+                              description="the final comment text (edited or not); default: the Task's draft")
+
+
+@app.post("/triage/{task:path}/approve", tags=["triage"],
+          summary="Approve a draft: post it to the sandbox issue (dry run for now) and mark the Task approved")
+async def approve(task: str, body: ApproveIn) -> dict[str, Any]:
+    """task: the issue number (9), the issue id or the full task id (URL-encode '#' as %23).
+    The approval token is minted here, by the human's click, for this issue and this exact text;
+    post_triage refuses anything else and any repo but SANDBOX_REPO."""
+    org, user, task_id = _sandbox_org(), _user(body.user), _task_id(task)
+    rows = [r for r in ro_query(get_graph(org), "triage_inbox", {"status": "", "limit": 1000}) if r["task_id"] == task_id]
+    if not rows:
+        raise HTTPException(404, f"no triage task {task_id}")
+    item = rows[0]
+    if item["status"] == "approved":
+        raise HTTPException(409, f"{task_id} is already approved")
+    draft = (body.draft or item["draft"] or "").strip()
+    if not draft:
+        raise HTTPException(422, "nothing to approve: Steward hasn't drafted this task yet, so send the comment as draft")
+    token = make_approval_token(item["issue_id"], draft)
+    r = await app.state.mcp.call_tool("post_triage", {"org": org, "issue_id": item["issue_id"], "draft": draft,
+                                                      "approval_token": token})
+    if r.is_error:
+        raise HTTPException(403, " ".join(getattr(c, "text", "") for c in r.content) or "post_triage refused")
+    posted = r.structured_content["results"]
+    params = {"task_id": task_id, "draft": draft, "user": user, "now": int(time.time())}
+    done = await anyio.to_thread.run_sync(lambda: query(get_graph(org), "task_approve", params))
+    if not done:
+        raise HTTPException(409, f"{task_id} was approved meanwhile")
+    return {"task": done[0], "post": posted,
+            "cypher": [{"tool": "approve", "query": "task_approve", "cypher": load_query("task_approve"),
+                        "params": {**params, "draft": f"<{len(draft)} chars>"}, "rows": 1}]}
+
+
+# ---------------------------------------------------------------- My memory
+
+@app.get("/memory/{user}", tags=["memory"], summary="A user's past questions and what changed since, per org")
+def memory(user: str, org: str | None = Query(None, description="one org; default: every org"),
+           topic: str | None = None, limit: int = Query(10, ge=1, le=50)) -> dict[str, Any]:
+    user = _user(user)
+    out, cypher = {}, []
+    for o in [_org(org)] if org else orgs():
+        env = _run(tools.recall, o, user, topic, limit)
+        out[o] = {"questions": env["results"]["questions"], "changes": env["results"]["changes"],
+                  "sources": env["sources"]}
+        cypher += _cypher(env)
+    return {"user": user, "orgs": out, "cypher": cypher}
+
+
+# ---------------------------------------------------------------- Users
+
+class UserIn(BaseModel):
+    id: str = Field(examples=["amrith"], description="the username; becomes User.id")
+    github_login: str | None = Field(None, examples=["im-Amrith"],
+                                     description="optional; links (User)-[:IS]->(Person) where that person exists")
+
+
+@app.get("/users", tags=["users"], summary="Username picker: every user, with questions asked per org")
+def users() -> dict[str, Any]:
+    merged: dict[str, dict[str, Any]] = {}
+    for o in orgs():
+        for r in ro_query(get_graph(o), "users_list", {}):
+            u = merged.setdefault(r["id"], {"id": r["id"], "github_login": r["github_login"], "questions": 0,
+                                            "last_asked": None, "person_ids": {}})
+            u["questions"] += r["questions"]
+            u["github_login"] = u["github_login"] or r["github_login"]
+            if r["last_asked"] and (u["last_asked"] or 0) < r["last_asked"]:
+                u["last_asked"] = r["last_asked"]
+            if r["person_id"]:
+                u["person_ids"][o] = r["person_id"]
+    return {"users": sorted(merged.values(), key=lambda u: (-(u["last_asked"] or 0), u["id"]))}
+
+
+@app.post("/users", tags=["users"], summary="Create (or update) a user in every org graph", status_code=201)
+def create_user(body: UserIn) -> dict[str, Any]:
+    uid = _user(body.id)
+    params = {"id": uid, "github_login": body.github_login or None, "now": int(time.time())}
+    linked = {}
+    for o in orgs():
+        r = query(get_graph(o), "user_upsert", params)[0]
+        if r["person_id"]:
+            linked[o] = r["person_id"]
+    return {"id": uid, "github_login": body.github_login, "is_person": linked}

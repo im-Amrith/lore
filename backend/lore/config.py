@@ -199,6 +199,11 @@ class Settings(BaseSettings):
     llm_daily_call_cap: int = 2000
 
     github_webhook_secret: str = ""
+    # API (M10): browser origins allowed by CORS (comma-separated), and /ask limits per user.
+    # The frontend runs on 3001: 3000 is the FalkorDB browser in docker-compose.yml.
+    cors_origins: str = "http://localhost:3001,http://127.0.0.1:3001"
+    ask_per_minute: int = 5
+    ask_per_day: int = 100
     # Signs triage approvals: the UI mints a token for (issue, exact draft) when a human clicks
     # approve; post_triage refuses without it. Empty = every post is refused.
     triage_approval_secret: str = ""

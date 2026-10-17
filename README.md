@@ -44,6 +44,8 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | 09 | issue_text, module_decisions | Triage helpers: an issue's text (to embed it like stored issues); decisions affecting the modules where similar issues were fixed |
 | 11 | remember, recall_questions, what_changed | F6 memory: write User / Session / Question / Answer / CITED; read a user's past questions; query 11, cited nodes something newer SUPERSEDES or REFERENCES |
 | 10 | co_changed_reset, co_changed, impact_radius | Derive `CO_CHANGED` from commits touching 2-6 modules (bulk skipped); F8: co-changed modules with share of commits, active decisions and top experts |
+| 13 | task_open, open_issues, triage_inbox, task_approve | F5 work board: open a triage `Task -[:FOR]-> Issue` per open sandbox issue (MERGE on a deterministic id, never two), the inbox, and a one-time approval |
+| 14 | users_list, user_upsert | Username picker: users with question counts; create a user and link `(User)-[:IS]->(Person)` |
 | 93 | data_version | Fingerprint of an org graph's knowledge (counts, latest timestamps, EXPERT_IN / CO_CHANGED totals; memory excluded), keying the Navigator's answer cache |
 | 92 | check_evidence_prs | Eval only (golden q06): which cited PRs contain a person's non-bulk commits on a module |
 
@@ -64,7 +66,24 @@ uv run --directory backend python -m lore.mcp_server                          # 
 uv run --directory backend python scripts/ask.py --org FalkorDB --user amrith "Who knows the Cypher parser?"   # Navigator
 uv run --directory backend python scripts/eval.py                             # golden set (not-yet-passed questions) -> docs/eval_results.md
 uv run --directory backend python scripts/warm.py                             # pre-answer the demo questions (answer cache)
+uv run --directory backend python scripts/tasks.py                            # open triage Tasks for open sandbox issues
+uv run --directory backend uvicorn lore.api.app:app --port 8000               # API, docs at http://localhost:8000/docs
 ```
+
+### API
+
+`backend/lore/api/app.py` (FastAPI, OpenAPI docs at `/docs`), one route per screen:
+
+| Route | Returns |
+| --- | --- |
+| `POST /ask` `{org, user, question}` | The Navigator's answer: cited sentences, citations with links, the subgraph and the walked path, every Cypher query that ran, the tools and LLM endpoints used. At most `ASK_PER_MINUTE` (5) and `ASK_PER_DAY` (100) per user; 429 with `Retry-After` past that, 503 when every free-tier LLM endpoint is out |
+| `GET /module/{id}` | CODEOWNERS owners vs active experts (paper owners, mismatch), experts with evidence PRs, decisions on the module split into current / pending proposals / history, co-changed modules |
+| `GET /risk` | Bus factor per module (single-expert first), bridge people (betweenness), working groups (label propagation) |
+| `GET /triage`, `POST /triage/{task}/approve` | Triage Tasks with their issue, draft and a live related-work preview; approve mints the approval token for that issue and exact text, calls `post_triage` (sandbox only; dry run until M13) and marks the Task approved |
+| `GET /memory/{user}` | Past questions per org and what changed since in the nodes their answers cited |
+| `GET /users`, `POST /users` | Username picker (no passwords); a GitHub login links `(User)-[:IS]->(Person)` |
+
+`/ask` and approve go through lore-mcp (an in-process MCP session); the read-only screens call the same named-query tool functions. CORS allows `CORS_ORIGINS` (the frontend on port 3001).
 
 ### lore-mcp
 
@@ -88,4 +107,5 @@ This project is built with Claude Code (Anthropic) as a coding assistant. The pl
 - M5 decisions (`backend/lore/llm/`, `ingest/extract.py`, extraction prompt, queries 01 decision loaders and 20): written with Claude Code. Decision extraction itself runs on Gemini (`LLM_FAST_MODEL`); every decision keeps a verified source quote and link.
 - M8 lore-mcp (`backend/lore/mcp_server/`, `lore/safety.py`, queries 03, 02 entry_modules/topics, 05 resolve_module/who_knows_topic, 09 helpers and 11, tests per tool): written with Claude Code. Thresholds were checked against the loaded graphs (e.g. duplicate distance 0.15 from measured sandbox distances).
 - M9 Navigator + eval (`agents/navigator.py`, `llm/agent.py`, `scripts/ask.py`, `scripts/eval.py`, eval fields for the sandbox and Bolt entries in `golden_set.yaml`): written with Claude Code. The Navigator itself runs on Gemini `gemini-3.8-flash` with Groq `gpt-oss-120b` as fallback; the eval scores its answers deterministically (no LLM judge).
+- M10 API (`backend/lore/api/`, queries 13 and 14, `ingest/tasks.py`, `scripts/tasks.py`, API tests): written with Claude Code.
 - M6 embeddings (`ingest/embed.py`, `graph/search.py`, queries 02, 09 and 21, `scripts/embed.py`, `scripts/find.py`): written with Claude Code, including the fusion tuning against q01-q04 and s01 (measured ranks are in `queries/02_entry_decisions.cypher`). Embeddings run locally with fastembed (`BAAI/bge-small-en-v1.5`).

@@ -93,7 +93,8 @@ uv run --directory backend python -m lore.mcp_server            # lore-mcp tool 
 uv run --directory backend python scripts/ask.py --org FalkorDB --user amrith "Who owns the query planner?"   # Navigator: answer, path, Cypher (--no-remember, --brief, --json)
 uv run --directory backend python scripts/eval.py               # golden set: reruns only questions not yet passed -> docs/eval_results.md (--only q06,q07; --all; --pause 5; --no-cache)
 uv run --directory backend python scripts/warm.py               # pre-answer the demo questions into the answer cache (--check: report only, no LLM)
-# add: serve command as it is created
+uv run --directory backend python scripts/tasks.py              # Librarian: open triage Tasks for open sandbox issues (--issue 9 10)
+uv run --directory backend uvicorn lore.api.app:app --port 8000 # API; OpenAPI docs at http://localhost:8000/docs
 ```
 
 ## Conventions

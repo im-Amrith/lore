@@ -372,8 +372,9 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
     tools = llm_tools(await client.list_tools())
     llm_calls: list[dict[str, Any]] = []
 
-    def chat(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        r = agent_chat(*args, **kwargs)
+    async def chat(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        # The OpenAI client blocks; a worker thread keeps the API's event loop free meanwhile.
+        r = await anyio.to_thread.run_sync(lambda: agent_chat(*args, **kwargs))
         llm_calls.append({k: r.get(k) for k in ("model", "endpoint", "prompt_tokens", "seconds", "cached")})
         return r
     ev = _Evidence()
@@ -424,7 +425,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
 
     # Step 3: call 1 picks every tool it needs, in one turn.
     model = ""
-    reply = chat(messages, tools, use_cache=use_cache)
+    reply = await chat(messages, tools, use_cache=use_cache)
     model = reply["model"]
     if reply["tool_calls"]:
         results = await run_calls(reply)
@@ -432,13 +433,13 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         if all(_thin(r) for r in results) and used < NAVIGATOR_MAX_TOOL_CALLS:
             messages.append({"role": "user", "content": "Those results are empty. Try other tools or arguments "
                                                         f"(at most {NAVIGATOR_MAX_TOOL_CALLS - used} calls), or call nothing."})
-            reply = chat(messages, tools, use_cache=use_cache)
+            reply = await chat(messages, tools, use_cache=use_cache)
             if reply["tool_calls"]:
                 await run_calls(reply)
 
     # Step 5: compose from the tool results (no tools offered), then keep only cites a tool returned.
     compose = [{"role": "system", "content": COMPOSE}, *flatten(messages[1:])]
-    reply = chat(compose, json_schema=ANSWER_SCHEMA, use_cache=use_cache)
+    reply = await chat(compose, json_schema=ANSWER_SCHEMA, use_cache=use_cache)
     model = model or reply["model"]
     parsed = _parse_answer(reply["content"]) or {
         "sentences": [], "found": False, "not_found": "the model returned no readable answer"}
