@@ -7,13 +7,22 @@ Routes, one per UI screen (docs/PLAN.md "UI screens"):
   POST /ask/stream                  the same, streaming the tools and LLM calls as they happen (NDJSON)
   GET  /module/{id}                 owners vs experts, decisions by status, co-changed modules
   GET  /risk                        bus factor per module, bridge people, working groups
-  GET  /triage                      triage inbox: Tasks, their issue, draft, related work
-  POST /triage/{task}/approve       approve a draft: post_triage (sandbox only), Task -> approved
+  GET  /triage                      triage inbox: Tasks, their issue, Steward's draft and its facts
+  POST /triage/{task}/approve       approve a draft (edited or not): post_triage (sandbox only), Task -> approved;
+                                    an edit is stored as Feedback and adds a rule to the Playbook
+  POST /triage/{task}/redraft       put a drafted Task back on the board and let Steward draft it again
+  POST /triage/sync                 check SANDBOX_REPO for new issues now and draft them
+  GET  /playbook                    Steward's triage Playbook and the Feedback that adjusted it
+  POST /webhook/github              sandbox issue events (signature checked): load the issue, open a Task
   GET  /memory/{user}               past questions and what changed since
   GET  /users, POST /users          username picker (no passwords)
   GET  /health                      graphs, data versions, LLM endpoint states
 
-/ask and the approve route go through lore-mcp (an in-process MCP session opened at startup:
+Steward (M13): with STEWARD_POLL_SECONDS > 0 the API polls SANDBOX_REPO for new issues (default every
+60 s, so no tunnel is needed locally); the deployed backend gets the same events from the webhook.
+Either way the Librarian loads the issue and opens a Task, then Steward claims and drafts it.
+
+/ask, Steward and the approve route go through lore-mcp (an in-process MCP session opened at startup:
 the same server and protocol as stdio, without a second process loading the embedding model).
 The read-only screens call the same named-query tool functions directly. Every response that
 reads the graph carries the Cypher that ran, for the UI's "show query" toggle.
@@ -23,29 +32,36 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import re
 import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
 import anyio
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from mcp.client import Client
 from pydantic import BaseModel, Field
 
+from lore.agents import steward
 from lore.agents.navigator import ask as navigator_ask
 from lore.api.ratelimit import RateLimiter
-from lore.config import DECISION_MIN_CONFIDENCE, get_settings, graph_name
+from lore.config import DECISION_MIN_CONFIDENCE, PLAYBOOK_DEFAULT_STEPS, PLAYBOOK_NAME, get_settings, graph_name
 from lore.graph.client import get_db, get_graph, query, ro_query
 from lore.graph.queries import load_query
+from lore.ingest import live
 from lore.llm.agent import load_state
 from lore.llm.chat import LLMError
 from lore.mcp_server import tools
 from lore.mcp_server.server import mcp
-from lore.safety import make_approval_token
+from lore.safety import WriteRefused, make_approval_token, verify_webhook
+
+# A child of uvicorn's logger, so Steward's progress shows in the server log at its level.
+log = logging.getLogger("uvicorn.error").getChild("steward")
 
 USER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$")
 
@@ -93,7 +109,14 @@ def _cypher(*envelopes: dict[str, Any], extra: list[dict[str, Any]] | None = Non
 async def lifespan(app: FastAPI):
     async with Client(mcp) as client:
         app.state.mcp = client
+        app.state.steward = {"agent": steward.agent_name(), "last_tick": None, "last_error": None}
+        app.state.background = set()
+        poll = None
+        if settings.sandbox_repo and settings.steward_poll_seconds > 0:
+            poll = asyncio.create_task(_steward_poll())
         yield
+        if poll:
+            poll.cancel()
 
 
 settings = get_settings()
@@ -245,6 +268,71 @@ def risk(org: str | None = None, repo: str | None = Query(None, description="lim
     return {"org": org, **env["results"], "cypher": _cypher(env)}
 
 
+# ---------------------------------------------------------------- Steward (poll, webhook)
+
+_tick_lock = asyncio.Lock()
+
+
+async def steward_tick(issues: list[dict[str, Any]] | None = None, force: bool = False,
+                       task_ids: list[str] | None = None) -> dict[str, Any]:
+    """Librarian intake (new issues -> Issue nodes + open Tasks), then Steward drafts open Tasks.
+    One tick at a time per process; across processes the atomic claim keeps drafts single."""
+    repo = settings.sandbox_repo
+    async with _tick_lock:
+        taken = await anyio.to_thread.run_sync(lambda: live.intake(repo, issues, force))
+        for i in taken["loaded"]:
+            log.info("steward: loaded %s", i)
+        drafted = await steward.run_once(app.state.mcp, repo.split("/")[0], app.state.steward["agent"],
+                                         task_ids=task_ids, log=log.info)
+    state = {"at": int(time.time()), "loaded": taken["loaded"], "opened": [x["task_id"] for x in taken["tasks"]],
+             "drafted": [{k: d.get(k) for k in ("task_id", "status", "error", "model")} for d in drafted]}
+    app.state.steward.update(last_tick=state, last_error=None)
+    return state
+
+
+async def _steward_poll() -> None:
+    while True:
+        try:
+            await steward_tick()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 - GitHub or the LLM pool down: log it, try next minute
+            app.state.steward["last_error"] = f"{type(e).__name__}: {e}"
+            log.warning("steward poll failed: %s: %s", type(e).__name__, e)
+        await asyncio.sleep(settings.steward_poll_seconds)
+
+
+def _in_background(coro) -> None:
+    task = asyncio.create_task(coro)
+    app.state.background.add(task)  # keep a reference until it finishes
+    task.add_done_callback(app.state.background.discard)
+
+
+@app.post("/webhook/github", tags=["triage"], status_code=202,
+          summary="GitHub webhook for SANDBOX_REPO issue events (X-Hub-Signature-256 checked)")
+async def github_webhook(request: Request) -> dict[str, Any]:
+    """Point the sandbox repo's webhook here (content type application/json, the secret in
+    GITHUB_WEBHOOK_SECRET, "Issues" events). An opened, reopened or edited issue is loaded and gets
+    a triage Task; Steward drafts it in the background. Anything else is acknowledged and ignored."""
+    body = await request.body()
+    try:
+        verify_webhook(body, request.headers.get("X-Hub-Signature-256"))
+    except WriteRefused as e:
+        raise HTTPException(401, str(e)) from e
+    event = request.headers.get("X-GitHub-Event", "")
+    payload = json.loads(body or b"{}")
+    if event == "ping":
+        return {"ok": True, "event": "ping"}
+    repo = (payload.get("repository") or {}).get("full_name", "")
+    if event != "issues" or payload.get("action") not in ("opened", "reopened", "edited"):
+        return {"ok": True, "ignored": f"{event} {payload.get('action', '')}".strip()}
+    if repo.lower() != settings.sandbox_repo.lower():
+        raise HTTPException(403, f"{repo} is not the sandbox repo")
+    issue = payload["issue"]
+    _in_background(steward_tick([issue], force=True))
+    return {"ok": True, "event": "issues", "action": payload["action"], "issue": issue.get("number")}
+
+
 # ---------------------------------------------------------------- Triage inbox
 
 def _sandbox_org() -> str:
@@ -260,34 +348,41 @@ def _task_id(task: str) -> str:
     return task if task.startswith("task:") else f"task:triage:{task}"
 
 
-@app.get("/triage", tags=["triage"], summary="Triage inbox: Tasks with their issue, draft and related work")
+@app.get("/triage", tags=["triage"],
+         summary="Triage inbox: Tasks with their issue, Steward's draft and its facts")
 def triage(status: str = Query("", description="open, claimed, drafted, approved; empty = all"),
-           preview: bool = Query(True, description="add related work (similar issues, decisions) per issue"),
-           limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+           preview: bool = Query(False, description="also run related_work for Tasks Steward hasn't drafted yet"),
+           limit: int = Query(30, ge=1, le=100)) -> dict[str, Any]:
     org = _sandbox_org()
     params = {"status": status, "limit": limit}
     items = ro_query(get_graph(org), "triage_inbox", params)
     cypher = [{"tool": "triage", "query": "triage_inbox", "cypher": load_query("triage_inbox"), "params": params,
                "rows": len(items)}]
     for item in items:
-        if preview and item["status"] != "approved":
+        item["facts"] = json.loads(item["facts"]) if item.get("facts") else None
+        if preview and not item["facts"] and item["status"] != "approved":
             env = _run(tools.related_work, org, item["issue_id"], None, 3)
             r = env["results"]
             item["related"] = {"similar_issues": r["similar_issues"], "duplicate_candidates": r["duplicate_candidates"],
                                "modules": r["modules"], "decisions": r["decisions"][:3],
                                "pending_proposals": r["pending_proposals"][:2]}
             cypher += _cypher(env)
-    return {"org": org, "repo": settings.sandbox_repo, "items": items, "cypher": cypher}
+    return {"org": org, "repo": settings.sandbox_repo, "items": items, "cypher": cypher,
+            "dry_run": settings.dry_run, "poll_seconds": settings.steward_poll_seconds,
+            "steward": app.state.steward}
 
 
 class ApproveIn(BaseModel):
     user: str = Field(examples=["amrith"])
     draft: str | None = Field(None, max_length=4000,
                               description="the final comment text (edited or not); default: the Task's draft")
+    rule: str | None = Field(None, max_length=300,
+                             description="what Steward should do next time; when the draft was edited and this is "
+                                         "empty, the rule is learned from the edit")
 
 
 @app.post("/triage/{task:path}/approve", tags=["triage"],
-          summary="Approve a draft: post it to the sandbox issue (dry run for now) and mark the Task approved")
+          summary="Approve a draft: post it to the sandbox issue (unless DRY_RUN) and mark the Task approved")
 async def approve(task: str, body: ApproveIn) -> dict[str, Any]:
     """task: the issue number (9), the issue id or the full task id (URL-encode '#' as %23).
     The approval token is minted here, by the human's click, for this issue and this exact text;
@@ -308,13 +403,81 @@ async def approve(task: str, body: ApproveIn) -> dict[str, Any]:
     if r.is_error:
         raise HTTPException(403, " ".join(getattr(c, "text", "") for c in r.content) or "post_triage refused")
     posted = r.structured_content["results"]
-    params = {"task_id": task_id, "draft": draft, "user": user, "now": int(time.time())}
+    params = {"task_id": task_id, "draft": draft, "user": user, "now": int(time.time()),
+              "posted": bool(posted.get("posted")), "dry_run": bool(posted.get("dry_run")),
+              "comment_url": posted.get("comment_url")}
     done = await anyio.to_thread.run_sync(lambda: query(get_graph(org), "task_approve", params))
     if not done:
         raise HTTPException(409, f"{task_id} was approved meanwhile")
-    return {"task": done[0], "post": posted,
-            "cypher": [{"tool": "approve", "query": "task_approve", "cypher": load_query("task_approve"),
-                        "params": {**params, "draft": f"<{len(draft)} chars>"}, "rows": 1}]}
+    cypher = [{"tool": "approve", "query": "task_approve", "cypher": load_query("task_approve"),
+               "params": {**params, "draft": f"<{len(draft)} chars>"}, "rows": 1}]
+    feedback = None
+    before = (item["draft"] or "").strip()
+    if before and _differs(before, draft):
+        feedback, fb_cypher = await _store_feedback(org, task_id, user, before, draft, (body.rule or "").strip())
+        cypher.append(fb_cypher)
+    return {"task": done[0], "post": posted, "feedback": feedback, "cypher": cypher}
+
+
+def _differs(a: str, b: str) -> bool:
+    """An edit worth learning from: more than whitespace changed."""
+    return re.sub(r"\s+", " ", a).strip() != re.sub(r"\s+", " ", b).strip()
+
+
+async def _store_feedback(org: str, task_id: str, user: str, before: str, after: str,
+                          rule: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(Feedback)-[:ADJUSTS]->(Playbook): the edit, and the rule it teaches Steward (the human's own
+    words when given, else one LLM call; no LLM available = the edit is stored without a rule)."""
+    learned = False
+    if not rule:
+        try:
+            rule = await anyio.to_thread.run_sync(lambda: steward.learn_rule(before, after))
+            learned = True
+        except LLMError as e:
+            log.warning("feedback: no rule learned (%s)", e)
+    params = {"name": PLAYBOOK_NAME, "default_steps": PLAYBOOK_DEFAULT_STEPS,
+              "feedback_id": f"feedback:{uuid.uuid4().hex[:16]}", "text": rule or "edited the draft",
+              "rule": rule, "before": before, "after": after, "task_id": task_id, "user": user,
+              "now": int(time.time())}
+    row = (await anyio.to_thread.run_sync(lambda: query(get_graph(org), "feedback_add", params)))[0]
+    shown = {**params, "before": f"<{len(before)} chars>", "after": f"<{len(after)} chars>",
+             "default_steps": f"<{len(PLAYBOOK_DEFAULT_STEPS)} steps>"}
+    return ({"id": row["feedback_id"], "rule": rule, "learned": learned, "playbook_version": row["version"],
+             "steps": row["steps"]},
+            {"tool": "approve", "query": "feedback_add", "cypher": load_query("feedback_add"), "params": shown,
+             "rows": 1})
+
+
+@app.post("/triage/{task:path}/redraft", tags=["triage"],
+          summary="Let Steward draft a Task again (e.g. after the Playbook learned a rule)")
+async def redraft(task: str) -> dict[str, Any]:
+    org, task_id = _sandbox_org(), _task_id(task)
+    if not await anyio.to_thread.run_sync(lambda: query(get_graph(org), "task_reopen", {"task_id": task_id})):
+        raise HTTPException(409, f"{task_id} is approved or doesn't exist; only drafted Tasks can be redrafted")
+    async with _tick_lock:
+        out = await steward.run_once(app.state.mcp, org, app.state.steward["agent"], task_ids=[task_id],
+                                     log=log.info)
+    if not out:
+        raise HTTPException(409, f"{task_id} was claimed by another worker")
+    r = out[0]
+    if r["status"] != "drafted":
+        raise HTTPException(503, f"Steward couldn't draft {task_id}: {r.get('error')}")
+    return {k: r.get(k) for k in ("task_id", "issue_id", "status", "draft", "facts", "playbook_version", "model")}
+
+
+@app.post("/triage/sync", tags=["triage"], summary="Check SANDBOX_REPO for new issues now and draft open Tasks")
+async def triage_sync() -> dict[str, Any]:
+    _sandbox_org()
+    try:
+        return await steward_tick()
+    except Exception as e:  # noqa: BLE001 - GitHub unreachable, LLM pool out: say so
+        raise HTTPException(503, f"sync failed: {type(e).__name__}: {e}") from e
+
+
+@app.get("/playbook", tags=["triage"], summary="Steward's triage Playbook: steps, version, Feedback")
+def playbook() -> dict[str, Any]:
+    env = _run(tools.get_playbook, _sandbox_org())
+    return {**env["results"], "cypher": _cypher(env)}
 
 
 # ---------------------------------------------------------------- My memory

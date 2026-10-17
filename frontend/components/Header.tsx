@@ -1,31 +1,57 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createUser, getUsers, type User } from "@/lib/api";
 
 export type Org = { id: string; label: string };
 
+const SCREENS = [
+  { href: "/", label: "Ask" },
+  { href: "/triage", label: "Triage" },
+];
+
 export function Header({
-  orgs, org, onOrg, user, onUser,
+  orgs = [], org, onOrg, user, onUser,
 }: {
-  orgs: Org[];
-  org: string;
-  onOrg: (id: string) => void;
+  orgs?: Org[];
+  org?: string;
+  onOrg?: (id: string) => void;
   user: string | null;
   onUser: (id: string) => void;
 }) {
+  const pathname = usePathname();
   return (
-    <header className="flex h-14 shrink-0 items-center gap-6 border-b border-line bg-surface/80 px-5 backdrop-blur">
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-surface/80 px-5 backdrop-blur md:gap-6">
       <div className="flex items-baseline gap-3">
         <span className="font-serif text-xl font-semibold tracking-tight text-ink">Lore</span>
-        <span className="hidden text-xs text-muted md:inline">who owns · who knows · why it was decided</span>
+        <span className="hidden text-xs text-muted xl:inline">who owns · who knows · why it was decided</span>
       </div>
 
-      <nav aria-label="Organisation" className="ml-auto flex rounded-lg border border-line bg-sunk p-0.5">
+      <nav aria-label="Screens" className="flex gap-1">
+        {SCREENS.map((s) => {
+          const here = s.href === "/" ? pathname === "/" : pathname?.startsWith(s.href);
+          return (
+            <Link
+              key={s.href}
+              href={s.href}
+              aria-current={here ? "page" : undefined}
+              className={`rounded-md px-2.5 py-1 text-sm transition-colors ${
+                here ? "bg-sunk font-medium text-ink" : "text-muted hover:text-ink"
+              }`}
+            >
+              {s.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <nav aria-label="Organisation" className={`ml-auto rounded-lg border border-line bg-sunk p-0.5 ${orgs.length ? "flex" : "hidden"}`}>
         {orgs.map((o) => (
           <button
             key={o.id}
-            onClick={() => onOrg(o.id)}
+            onClick={() => onOrg?.(o.id)}
             aria-pressed={o.id === org}
             className={`rounded-md px-3 py-1 text-sm transition-colors ${
               o.id === org ? "bg-surface font-medium text-ink shadow-sm" : "text-muted hover:text-ink"
@@ -36,7 +62,9 @@ export function Header({
         ))}
       </nav>
 
-      <UserPicker user={user} onUser={onUser} />
+      <div className={orgs.length ? "" : "ml-auto"}>
+        <UserPicker user={user} onUser={onUser} />
+      </div>
     </header>
   );
 }

@@ -27,6 +27,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from lore.config import (
     BETWEENNESS_SAMPLING_SIZE,
     BETWEENNESS_SEED,
@@ -37,10 +39,13 @@ from lore.config import (
     DECISION_MIN_CONFIDENCE,
     DUPLICATE_MAX_DISTANCE,
     IMPACT_MIN_COUNT,
+    PLAYBOOK_DEFAULT_STEPS,
+    PLAYBOOK_NAME,
     RISK_BRIDGE_PEOPLE,
     RISK_MAX_MODULES,
     SIMILAR_MAX_DISTANCE,
     TRACE_MAX_ISSUES,
+    get_settings,
     graph_name,
 )
 from lore.graph.client import get_db, get_graph, query, ro_query
@@ -339,13 +344,15 @@ def trace_decision(org: str, node_id: str, question: str | None = None) -> dict[
 
 # ---------------------------------------------------------------- 3. find_experts
 
-def find_experts(org: str, module_or_topic: str, since: str | int | None = None) -> dict[str, Any]:
-    """Query 5: ranked people for a module (EXPERT_IN) or, failing that, a topic (ABOUT PRs)."""
+def find_experts(org: str, module_or_topic: str, since: str | int | None = None,
+                 min_score: float = 0.5) -> dict[str, Any]:
+    """Query 5: ranked people for a module (EXPERT_IN) or, failing that, a topic (ABOUT PRs).
+    min_score: module experts need a score above it (Steward lowers it to find reviewers)."""
     run = Run("find_experts", org)
     since_at = parse_since(since)
     module, others = _resolve_module(run, module_or_topic)
     if module:
-        rows = run.ro("who_knows", {"module": module["id"], "since": since_at})
+        rows = run.ro("who_knows", {"module": module["id"], "since": since_at, "min_score": min_score})
         run.node(module["id"])
         commit_base = f"https://github.com/{org}/{module['repo']}/commit/"
         experts = []
@@ -359,7 +366,7 @@ def find_experts(org: str, module_or_topic: str, since: str | int | None = None)
             experts.append(r)
         return run.result({"subject": {"kind": "module", **module}, "experts": experts,
                            "other_matches": others, "since": since_at,
-                           **({} if experts else {"message": f"not found: no one with score > 0.5 on {module['path']}"})})
+                           **({} if experts else {"message": f"not found: no one with score > {min_score} on {module['path']}"})})
 
     wanted = (module_or_topic or "").strip().lower()
     if found := run.ro("entry_topics", {"terms": [wanted, *re.split(r"[-\s]+", wanted)], "limit": 1}):
@@ -390,7 +397,8 @@ def module_owners(org: str, module: str) -> dict[str, Any]:
     for o in r["owners"]:
         run.edge(o["id"], "OWNS", m["id"])
     # Evidence for each active expert: their top 3 PRs on the module (query 5, same as find_experts).
-    evidence = {x["person_id"]: x["evidence"] or [] for x in run.ro("who_knows", {"module": m["id"], "since": 0})}
+    rows = run.ro("who_knows", {"module": m["id"], "since": 0, "min_score": 0.5})
+    evidence = {x["person_id"]: x["evidence"] or [] for x in rows}
     for e in r["active_experts"]:
         run.edge(e["id"], "EXPERT_IN", m["id"])
         e["evidence"] = evidence.get(e["id"], [])[:3]
@@ -464,8 +472,10 @@ def related_work(org: str, issue_id: str | None = None, text: str | None = None,
         issue = found[0]
         title, body = issue["title"], issue["body"] or ""
         run.node(issue_id, issue["url"])
+        about = {"id": issue_id, "number": issue["number"], "title": title, "url": issue["url"], "body": body[:1000]}
     elif text:
         title, body = text, ""
+        about = {"id": None, "title": title}
     else:
         raise ValueError("give an issue_id or text")
 
@@ -500,7 +510,7 @@ def related_work(org: str, issue_id: str | None = None, text: str | None = None,
         decisions.sort(key=lambda d: (fix_rank.get(d["source_id"], len(similar)), min(rank[m] for m in d["modules"])))
         decisions = decisions[:8]
     return run.result({
-        "issue": {"id": issue_id, "title": title},
+        "issue": about,
         "similar_issues": similar,
         "duplicate_candidates": [s["id"] for s in similar if s["duplicate_candidate"]],
         "modules": modules,
@@ -587,11 +597,73 @@ def data_version(org: str) -> dict[str, Any]:
     return run.result({"version": hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16], "counts": row})
 
 
-# ---------------------------------------------------------------- 10. post_triage (dry run)
+# ---------------------------------------------------------------- 12. the work board (Steward)
+# Steward reaches its Tasks and Playbook through these tools like any other graph access. The
+# claim is the atomic query in docs/PLAN.md; draft and release only work for the claimer.
+
+def open_tasks(org: str, limit: int = 20) -> dict[str, Any]:
+    """Open triage Tasks, oldest first."""
+    run = Run("open_tasks", org)
+    rows = run.ro("open_tasks", {"limit": limit})
+    for r in rows:
+        run.edge(r["task_id"], "FOR", r["issue_id"])
+    return run.result({"tasks": rows})
+
+
+def claim_task(org: str, task_id: str, agent: str) -> dict[str, Any]:
+    """Claim one open Task for agent. claimed is False when another worker got it first."""
+    run = Run("claim_task", org)
+    rows = run.rw("task_claim", {"task_id": task_id, "agent": agent, "now": int(time.time())})
+    if rows:
+        run.edge(task_id, "FOR", rows[0]["issue_id"])
+    return run.result({"claimed": bool(rows), "task_id": task_id, "agent": agent,
+                       "issue_id": rows[0]["issue_id"] if rows else None})
+
+
+def save_draft(org: str, task_id: str, agent: str, draft: str, facts: dict[str, Any],
+               playbook_version: int = 0, model: str = "") -> dict[str, Any]:
+    """Store a draft triage comment (and the facts it was written from) on a Task agent holds."""
+    run = Run("save_draft", org)
+    rows = run.rw("task_draft", {"task_id": task_id, "agent": agent, "draft": draft,
+                                 "facts": json.dumps(facts, default=str), "playbook_version": playbook_version,
+                                 "model": model, "now": int(time.time())})
+    if not rows:
+        raise ValueError(f"{task_id} is not claimed by {agent}; draft not saved")
+    run.node(task_id)
+    return run.result({"saved": True, "task_id": task_id, "status": rows[0]["status"]})
+
+
+def release_task(org: str, task_id: str, agent: str, error: str = "") -> dict[str, Any]:
+    """Give a claimed Task back to the board (status open) with the reason."""
+    run = Run("release_task", org)
+    rows = run.rw("task_release", {"task_id": task_id, "agent": agent, "error": error[:500]})
+    return run.result({"released": bool(rows), "task_id": task_id})
+
+
+def get_playbook(org: str, name: str = PLAYBOOK_NAME) -> dict[str, Any]:
+    """The triage Playbook's steps and version, with the latest Feedback that adjusted it.
+    Before any Feedback there is no Playbook node: the default steps, version 0."""
+    run = Run("get_playbook", org)
+    rows = run.ro("playbook", {"name": name})
+    if not rows:
+        return run.result({"name": name, "steps": list(PLAYBOOK_DEFAULT_STEPS), "version": 0, "feedback": []})
+    r = rows[0]
+    run.node(f"playbook:{name}")
+    for f in r["feedback"]:
+        run.edge(f["id"], "ADJUSTS", f"playbook:{name}")
+    return run.result({"name": name, "steps": r["steps"] or [], "version": r["version"] or 0,
+                       "feedback": r["feedback"]})
+
+
+# ---------------------------------------------------------------- 10. post_triage
+
+GITHUB_API = "https://api.github.com"
+
 
 def post_triage(org: str, issue_id: str, draft: str, approval_token: str) -> dict[str, Any]:
-    """Post an approved triage comment, only to SANDBOX_REPO. Dry run for now (M8): it checks the
-    allowlist, the approval token and that the issue exists, then prints the comment instead of posting."""
+    """Post an approved triage comment, only to SANDBOX_REPO. It checks the allowlist, the
+    approval token and that the issue exists; then, with DRY_RUN=true (the default), prints the
+    comment instead of posting it, and with DRY_RUN=false posts it with GITHUB_TOKEN."""
     repo, number = parse_issue_id(issue_id)
     check_sandbox_repo(repo)  # raises WriteRefused before anything else happens
     check_approval(issue_id, draft, approval_token)
@@ -600,8 +672,23 @@ def post_triage(org: str, issue_id: str, draft: str, approval_token: str) -> dic
     if not found:
         raise ValueError(f"no issue {issue_id} in graph {run.name}")
     run.node(issue_id, found[0]["url"])
-    # stdout is the MCP stdio channel, so the dry-run comment goes to stderr.
-    print(f"[post_triage dry run] {repo}#{number}\n{draft}\n[end]", file=sys.stderr)
-    return run.result({"dry_run": True, "posted": False, "repo": repo, "issue_number": number,
-                       "issue_url": found[0]["url"], "comment": draft,
-                       "would_post_to": f"https://api.github.com/repos/{repo}/issues/{number}/comments"})
+    target = f"{GITHUB_API}/repos/{repo}/issues/{number}/comments"
+    out = {"repo": repo, "issue_number": number, "issue_url": found[0]["url"], "comment": draft}
+    s = get_settings()
+    if s.dry_run:
+        # stdout is the MCP stdio channel, so the dry-run comment goes to stderr.
+        print(f"[post_triage dry run] {repo}#{number}\n{draft}\n[end]", file=sys.stderr)
+        return run.result({**out, "dry_run": True, "posted": False, "would_post_to": target})
+    if not s.github_token:
+        raise PermissionError("GITHUB_TOKEN is not set, so the comment can't be posted (DRY_RUN is false)")
+    r = httpx.post(target, json={"body": draft}, timeout=30,
+                   headers={"Authorization": f"Bearer {s.github_token}", "Accept": "application/vnd.github+json",
+                            "User-Agent": "lore-steward"})
+    if r.status_code != 201:
+        # Only GitHub's message: never the request (it carries the token).
+        is_json = r.headers.get("content-type", "").startswith("application/json")
+        msg = r.json().get("message", "") if is_json else r.text[:200]
+        raise ValueError(f"GitHub refused the comment on {repo}#{number}: HTTP {r.status_code} {msg}")
+    url = r.json().get("html_url")
+    run.sources["comment"] = url
+    return run.result({**out, "dry_run": False, "posted": True, "comment_url": url})

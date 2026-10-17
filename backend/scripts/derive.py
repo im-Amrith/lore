@@ -65,7 +65,7 @@ def derive(g, now: int) -> None:
 def report(g, now: int, modules: list[str], top: int) -> None:
     for module in modules:
         print(f"\n[05 who_knows] {module}")
-        rows = ro_query(g, "who_knows", {"module": module, "since": 0})
+        rows = ro_query(g, "who_knows", {"module": module, "since": 0, "min_score": 0.5})
         if not rows:
             print("  not found: no one with score > 0.5")
         for r in rows:

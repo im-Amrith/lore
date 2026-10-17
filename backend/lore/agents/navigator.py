@@ -45,7 +45,8 @@ from lore.llm.agent import agent_chat, flatten
 # Tools the LLM may choose. remember (step 7) is called by code; post_triage belongs to Steward.
 AGENT_TOOLS = ("find_entities", "trace_decision", "find_experts", "module_owners", "knowledge_risk",
                "related_work", "impact_radius", "recall")
-HIDDEN_ARGS = ("org", "user_id", "question")  # question: trace_decision ranks linked issues by it
+# question: trace_decision ranks linked issues by it. min_score (find_experts) is Steward's.
+HIDDEN_ARGS = ("org", "user_id", "question", "min_score")
 
 # Step 1. Checked in order; the first rule with a matching phrase wins.
 INTENT_RULES: list[tuple[str, tuple[str, ...]]] = [

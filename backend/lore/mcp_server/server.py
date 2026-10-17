@@ -1,4 +1,6 @@
-"""lore-mcp: the Lore tools over MCP (ten from docs/PLAN.md, plus data_version) (Python MCP SDK 2.x, MCPServer).
+"""lore-mcp: the Lore tools over MCP (Python MCP SDK 2.x, MCPServer): the ten from docs/PLAN.md,
+plus data_version and Steward's work board (open_tasks, claim_task, save_draft, release_task,
+get_playbook).
 
 Run over stdio:  uv run --directory backend python -m lore.mcp_server
 Each tool is a thin wrapper over lore.mcp_server.tools; see that module for the envelope
@@ -65,11 +67,11 @@ def trace_decision(org: str, node_id: str, question: str | None = None) -> dict[
 
 
 @mcp.tool(annotations=READ)
-def find_experts(org: str, module_or_topic: str, since: str | None = None) -> dict[str, Any]:
+def find_experts(org: str, module_or_topic: str, since: str | None = None, min_score: float = 0.5) -> dict[str, Any]:
     """Who knows a module (id, path like graph/src/index, or last segment like parser) or a topic
     (e.g. link-cache): ranked people with time-decayed scores and evidence PRs and commits.
     since (YYYY-MM-DD) keeps people active since then."""
-    return t.find_experts(org, module_or_topic, since)
+    return t.find_experts(org, module_or_topic, since, min_score)
 
 
 @mcp.tool(annotations=READ)
@@ -129,8 +131,44 @@ def data_version(org: str) -> dict[str, Any]:
                                       openWorldHint=True))
 def post_triage(org: str, issue_id: str, draft: str, approval_token: str) -> dict[str, Any]:
     """Post a human-approved triage comment on an issue in the sandbox repo. Needs the approval
-    token the UI issues for this exact issue and draft; any other repo is refused. Currently a dry run."""
+    token the UI issues for this exact issue and draft; any other repo is refused. With DRY_RUN=true
+    (the default) the comment is only printed."""
     return t.post_triage(org, issue_id, draft, approval_token)
+
+
+# Steward's work board. Not offered to the Navigator (agents/navigator.py AGENT_TOOLS).
+WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+
+
+@mcp.tool(annotations=READ)
+def open_tasks(org: str, limit: int = 20) -> dict[str, Any]:
+    """Open triage Tasks on the work board (each FOR an issue), oldest first."""
+    return t.open_tasks(org, limit)
+
+
+@mcp.tool(annotations=WRITE)
+def claim_task(org: str, task_id: str, agent: str) -> dict[str, Any]:
+    """Atomically claim an open Task for agent. claimed is false when another worker has it."""
+    return t.claim_task(org, task_id, agent)
+
+
+@mcp.tool(annotations=WRITE)
+def save_draft(org: str, task_id: str, agent: str, draft: str, facts: dict[str, Any],
+               playbook_version: int = 0, model: str = "") -> dict[str, Any]:
+    """Store a draft triage comment and the facts it was written from on a Task agent has claimed."""
+    return t.save_draft(org, task_id, agent, draft, facts, playbook_version, model)
+
+
+@mcp.tool(annotations=WRITE)
+def release_task(org: str, task_id: str, agent: str, error: str = "") -> dict[str, Any]:
+    """Put a claimed Task back on the board (open), recording why the draft failed."""
+    return t.release_task(org, task_id, agent, error)
+
+
+@mcp.tool(annotations=READ)
+def get_playbook(org: str, name: str = "triage") -> dict[str, Any]:
+    """The triage Playbook (procedural memory): its steps, version and the Feedback that adjusted it."""
+    return t.get_playbook(org, name)
 
 
 def main() -> None:

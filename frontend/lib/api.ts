@@ -123,3 +123,118 @@ export async function askStream(
     if (done) throw new ApiError(502, "the answer stream ended early");
   }
 }
+
+// ---------------------------------------------------------------- Triage inbox (M13)
+
+export type Link = { id: string | null; url: string };
+
+export type TriagePerson = {
+  id: string;
+  name: string;
+  login: string | null;
+  mention: string;
+  why?: string;
+  evidence?: Link[];
+  text?: string;
+};
+
+export type TriageFacts = {
+  issue: { id: string; number: number; title: string; url: string } | null;
+  related_issues: {
+    id: string;
+    number: number;
+    title: string;
+    url: string;
+    state: string;
+    distance: number;
+    duplicate: boolean;
+    fixed_by: Link[];
+  }[];
+  likely_duplicates: { id: string; number: number }[];
+  module: { id: string; path: string | null } | null;
+  decision_behind_fix: { id: string; statement: string; rationale: string | null; source_id: string; url: string | null } | null;
+  pending_proposals: { id: string; statement: string; source_id: string; url: string | null }[];
+  suggested_owner: TriagePerson | null;
+  paper_owner_warnings: TriagePerson[];
+  suggested_reviewer: TriagePerson | null;
+  codeowners_url: string | null;
+  tool_calls: { tool: string; args: Record<string, unknown>; queries: string[] }[];
+  rejected_links: string[];
+  playbook_steps: string[];
+};
+
+export type TriageItem = {
+  task_id: string;
+  status: "open" | "claimed" | "drafted" | "approved";
+  opened_at: number | null;
+  claimed_by: string | null;
+  draft: string | null;
+  facts: TriageFacts | null;
+  playbook_version: number | null;
+  drafted_by: string | null;
+  drafted_at: number | null;
+  model: string | null;
+  error: string | null;
+  attempts: number | null;
+  approved_draft: string | null;
+  approved_by: string | null;
+  approved_at: number | null;
+  posted: boolean | null;
+  dry_run: boolean | null;
+  comment_url: string | null;
+  issue_id: string;
+  number: number;
+  title: string;
+  url: string;
+  issue_state: string;
+  body: string;
+};
+
+export type TriageInbox = {
+  org: string;
+  repo: string;
+  items: TriageItem[];
+  dry_run: boolean;
+  poll_seconds: number;
+  steward: {
+    agent: string;
+    last_tick: { at: number; loaded: string[]; opened: string[]; drafted: { task_id: string; status: string; error?: string }[] } | null;
+    last_error: string | null;
+  };
+  cypher: CypherRun[];
+};
+
+export type Playbook = {
+  name: string;
+  steps: string[];
+  version: number;
+  feedback: { id: string; text: string; rule: string; at: number; by: string; task_id: string }[];
+};
+
+export type ApproveResult = {
+  task: { task_id: string; status: string; posted: boolean; dry_run: boolean; comment_url: string | null };
+  post: { dry_run: boolean; posted: boolean; comment_url?: string; would_post_to?: string; issue_url: string };
+  feedback: { id: string; rule: string; learned: boolean; playbook_version: number; steps: string[] } | null;
+};
+
+const post = (path: string, body?: unknown) =>
+  fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+// The API takes a sandbox issue number for a Task (POST /triage/9/approve).
+const taskPath = (issueNumber: number) => String(issueNumber);
+
+export const getTriage = () => fetch(`${API_URL}/triage`).then((r) => json<TriageInbox>(r));
+
+export const getPlaybook = () => fetch(`${API_URL}/playbook`).then((r) => json<Playbook>(r));
+
+export const syncTriage = () => post("/triage/sync").then((r) => json<unknown>(r));
+
+export const redraftTask = (issueNumber: number) =>
+  post(`/triage/${taskPath(issueNumber)}/redraft`).then((r) => json<unknown>(r));
+
+export const approveTask = (issueNumber: number, body: { user: string; draft: string; rule?: string }) =>
+  post(`/triage/${taskPath(issueNumber)}/approve`, body).then((r) => json<ApproveResult>(r));

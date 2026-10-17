@@ -60,3 +60,15 @@ def check_approval(issue_id: str, draft: str, token: str) -> None:
         raise WriteRefused("TRIAGE_APPROVAL_SECRET is not set, so no approval is valid")
     if not token or not hmac.compare_digest(_digest(issue_id, draft, secret), token):
         raise WriteRefused("approval token does not match this issue and draft; a human must approve it in the UI")
+
+
+def verify_webhook(body: bytes, signature: str | None) -> None:
+    """GitHub signs each webhook delivery: X-Hub-Signature-256 = 'sha256=' + HMAC-SHA256(secret, raw
+    body). Raise WriteRefused unless it matches GITHUB_WEBHOOK_SECRET (unset = every delivery refused),
+    so only GitHub can open Tasks through the webhook."""
+    secret = get_settings().github_webhook_secret
+    if not secret:
+        raise WriteRefused("GITHUB_WEBHOOK_SECRET is not set, so webhook deliveries are refused")
+    expected = "sha256=" + hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    if not signature or not hmac.compare_digest(expected, signature.strip()):
+        raise WriteRefused("webhook signature does not match GITHUB_WEBHOOK_SECRET")

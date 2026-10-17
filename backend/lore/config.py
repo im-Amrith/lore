@@ -93,6 +93,27 @@ SIMILAR_MAX_DISTANCE = 0.5  # similar issues further than this are not shown
 # but different issues sit at 0.19 (CSV clicks missing vs #9 CSV timeout; #6 vs #1), the demo issue 0.35 from #3.
 DUPLICATE_MAX_DISTANCE = 0.15
 
+# Steward (M13). A triage draft lists similar issues within RELATED_MAX_DISTANCE, plus always the
+# nearest one. Sandbox: CSV clicks missing -> #9 at 0.19 and #4 at 0.25 (#3 at 0.42 left out); the
+# demo issue -> only its nearest, #3 at 0.35 (#7 at 0.40 and #1 at 0.41 are noise).
+RELATED_MAX_DISTANCE = 0.30
+# A reviewer may have less expertise than an answer's experts: one review of one PR scores ~0.5.
+REVIEWER_MIN_SCORE = 0.1
+# Modules that say little about who should own a bug: test and doc folders touched by every fix.
+TRIAGE_SKIP_MODULES = ("tests", "test", "docs", "doc", "/")
+STEWARD_MAX_ATTEMPTS = 3
+# The triage Playbook's steps before any Feedback (procedural memory, docs/PLAN.md). A human's edit
+# of a draft adds a rule after these (queries/13_feedback_add.cypher).
+PLAYBOOK_NAME = "triage"
+PLAYBOOK_DEFAULT_STEPS = [
+    "Start with every likely duplicate and related past issue, each as a link: say how each closed one was fixed (the PR, as a link) and which are still open.",
+    "If an earlier fix rests on a recorded decision, state that decision in one sentence and link where it was made.",
+    "Suggest an owner: the person who actually works on the module. If CODEOWNERS lists someone who does not work there, say so plainly.",
+    "Suggest a reviewer, with the reason in a few words.",
+    "Mention people who have a GitHub login as @login, and people without one by name.",
+    "Keep it short: one opening line and at most 6 bullets; no greeting or sign-off.",
+]  # a Task whose draft failed this often stays open but is no longer retried
+
 # trace_decision: linked issues shown per decision (query 03 ranks them first).
 TRACE_MAX_ISSUES = 6
 
@@ -207,6 +228,12 @@ class Settings(BaseSettings):
     # Signs triage approvals: the UI mints a token for (issue, exact draft) when a human clicks
     # approve; post_triage refuses without it. Empty = every post is refused.
     triage_approval_secret: str = ""
+    # M13: post_triage only prints the comment while this is true; set DRY_RUN=false to post for real
+    # (still only to SANDBOX_REPO, still only with an approval token).
+    dry_run: bool = True
+    # The API polls SANDBOX_REPO for new issues this often and lets Steward draft them (0 = off; the
+    # deployed backend uses the webhook instead).
+    steward_poll_seconds: int = 60
 
 
 @lru_cache

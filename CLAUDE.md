@@ -89,12 +89,13 @@ uv run --directory backend python scripts/derive.py --org FalkorDB --report --al
 uv run --directory backend python scripts/extract.py --repo FalkorDB/FalkorDB --sample 30   # LLM decisions + topics, printed (--list: no LLM; --load: write; --all-prs: sandbox)
 uv run --directory backend python scripts/embed.py --org FalkorDB     # chunk docs, embed Decision/Issue/DocChunk, vector indexes
 uv run --directory backend python scripts/find.py --org FalkorDB "Why ...?"   # query 2 entry points (--issue "title": query 9; --check: M6 golden checks)
-uv run --directory backend python -m lore.mcp_server            # lore-mcp tool server over stdio (ten tools + data_version)
+uv run --directory backend python -m lore.mcp_server            # lore-mcp tool server over stdio (ten tools + data_version + Steward's work board)
 uv run --directory backend python scripts/ask.py --org FalkorDB --user amrith "Who owns the query planner?"   # Navigator: answer, path, Cypher (--no-remember, --brief, --json)
 uv run --directory backend python scripts/eval.py               # golden set: reruns only questions not yet passed -> docs/eval_results.md (--only q06,q07; --all; --pause 5; --no-cache)
 uv run --directory backend python scripts/warm.py               # pre-answer the demo questions into the answer cache (--check: report only, no LLM)
 uv run --directory backend python scripts/tasks.py              # Librarian: open triage Tasks for open sandbox issues (--issue 9 10)
-uv run --directory backend uvicorn lore.api.app:app --port 8000 # API; OpenAPI docs at http://localhost:8000/docs
+uv run --directory backend python scripts/steward.py            # Steward worker: new sandbox issues -> Tasks -> drafts (--poll 60, --no-intake)
+uv run --directory backend uvicorn lore.api.app:app --port 8000 # API + Steward poll (STEWARD_POLL_SECONDS); OpenAPI docs at http://localhost:8000/docs
 cd frontend; npm install; npm run dev; cd ..                   # UI on http://localhost:3001 (API URL: frontend/.env.local, NEXT_PUBLIC_API_URL)
 ```
 
