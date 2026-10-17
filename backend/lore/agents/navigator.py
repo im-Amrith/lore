@@ -86,7 +86,8 @@ ANSWER_RULES = """Answer rules:
 - Use only facts in the tool results. Never add outside knowledge.
 - Every sentence cites one or more ids copied exactly from the tool results (decision:..., pr:...,
   issue:..., person:..., module:..., doc:..., chunk:..., team:..., commit:..., or "codeowners").
-  Put ids only in cites, never in the sentence text; in text say "PR #2678", "issue #1", a login.
+  Put ids only in cites, never in the sentence text; in text say "PR #2678", "issue #1", a login,
+  and a doc by its file name ("ADR 0003-in-process-cache.md"), never "doc:..." or "decision:...".
 - Cite the evidence the tools return: when you name an expert, also cite their evidence PRs
   (pr:... ids); whenever you mention CODEOWNERS (an owner listed or not), cite "codeowners".
 - Name modules by their exact path as returned (graph/src/index), never a paraphrase ("the
@@ -112,6 +113,11 @@ ANSWER_RULES = """Answer rules:
   "no owner is listed in CODEOWNERS". Then say who actually does the work, and if the listed
   owner is not among the experts (paper owner), say so.
 - Risk questions: for each single-expert module, write its path and name its single expert.
+- What-changed questions (recall): report only the entries in `changes`: each says a newer node
+  (newer_id) SUPERSEDES or REFERENCES a node the user was shown (cited_id) for one of their past
+  questions. Name the past question, what replaced or referenced it, and the PR or doc. The
+  `questions` list is context (what they asked before), never a change. If `changes` is empty,
+  say nothing they were shown has changed since.
 - If no result answers the question (e.g. the matching PR has no recorded decision or reason),
   set found to false, say what is missing in not_found, and use sentences only for the nearest
   evidence (what the PR or issue did), never a guessed reason.

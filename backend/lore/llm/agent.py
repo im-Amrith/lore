@@ -38,6 +38,7 @@ from lore.config import (
     AGENT_COOLDOWN_DEFAULT,
     AGENT_LLM_POOL,
     AGENT_LLM_STATE,
+    AGENT_TIMEOUT,
     AGENT_WAIT_MAX,
     GEMINI_DAILY_RESET_UTC_HOUR,
     get_settings,
@@ -194,7 +195,7 @@ def agent_chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | Non
             count_call("agent")
             t0 = time.monotonic()
             try:
-                resp = _client(ep["base_url"], ep["api_key"]).chat.completions.create(
+                resp = _client(ep["base_url"], ep["api_key"]).with_options(timeout=AGENT_TIMEOUT).chat.completions.create(
                     **_kwargs(ep, messages, tools, tool_choice, json_schema))
                 out = {**_message(resp), "model": ep["model"], "endpoint": ep["label"],
                        "seconds": round(time.monotonic() - t0, 1)}

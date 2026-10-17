@@ -140,6 +140,7 @@ AGENT_LLM_POOL: list[tuple[str, str, str, bool]] = [
 ]
 AGENT_LLM_STATE = LLM_CACHE_DIR / "endpoint_state.json"  # cooldowns and exhausted endpoints, shared by runs
 AGENT_COOLDOWN_DEFAULT = 60  # seconds, when a per-minute 429 gives no retry-after
+AGENT_TIMEOUT = 40  # seconds per agent LLM request: a stalled endpoint falls through to the next one
 AGENT_WAIT_MAX = 65  # seconds worth waiting for the soonest cooldown when every endpoint is cooling down
 GEMINI_DAILY_RESET_UTC_HOUR = 8  # free-tier daily quotas reset at midnight Pacific (07:00 or 08:00 UTC)
 
