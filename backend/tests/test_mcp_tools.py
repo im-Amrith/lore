@@ -266,3 +266,25 @@ def test_smoke_impact_radius_parser():
     r = check_envelope(t.impact_radius("FalkorDB", "parser"), "impact_radius")
     top2 = {x["module"] for x in r["co_changed"][:2]}
     assert top2 == {"graph/src/planner", "graph/src/runtime"}  # golden q10, either order
+
+
+@needs_falkordb
+def test_trace_ranks_linked_issues_closes_and_links_back_first():
+    # PR #2279 CLOSES 116 issues; its tracking issue #2280 is the only one linking back (golden q03).
+    r = check_envelope(t.trace_decision("FalkorDB", "pr:FalkorDB/FalkorDB#2279",
+                                        question="Why are there two branches, main and master?"), "trace_decision")
+    [d] = r["decisions"]
+    assert d["issue_count"] == 116 and len(d["issues"]) == 6
+    assert d["issues"][0]["id"] == "issue:FalkorDB/FalkorDB#2280" and d["issues"][0]["links_back"]
+    assert [i["distance"] for i in d["issues"][1:]] == sorted(i["distance"] for i in d["issues"][1:])
+
+
+@needs_falkordb
+def test_module_owners_always_cites_codeowners_and_gives_evidence():
+    env = t.module_owners("FalkorDB", "planner")
+    r = check_envelope(env, "module_owners")
+    assert r["listed_owner"] is False  # golden q08: no owner listed, and CODEOWNERS is still the source
+    assert env["sources"]["codeowners"] == "https://github.com/FalkorDB/FalkorDB/blob/HEAD/CODEOWNERS"
+    top = r["active_experts"][0]
+    assert top["person"] == "AviAvni" and 1 <= len(top["evidence"]) <= 3
+    assert all(env["sources"][f"pr:FalkorDB/FalkorDB#{u.rsplit('/', 1)[1]}"] == u for u in top["evidence"])

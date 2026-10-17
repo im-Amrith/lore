@@ -56,11 +56,12 @@ def find_entities(org: str, text: str, labels: list[str] | None = None, limit: i
 
 
 @mcp.tool(annotations=READ)
-def trace_decision(org: str, node_id: str) -> dict[str, Any]:
-    """Why-trace: a decision's sources (PR / issue / doc), the issues they closed, who proposed and
-    approved it, affected modules, superseded versions (history) and open or draft PRs that propose
-    changing it (pending_proposals). node_id is a decision id or the id of the PR, issue or doc."""
-    return t.trace_decision(org, node_id)
+def trace_decision(org: str, node_id: str, question: str | None = None) -> dict[str, Any]:
+    """Why-trace: a decision's sources (PR / issue / doc), the issues they closed (top 6, ranked:
+    closed and linking back first, then by closeness to question), who proposed and approved it,
+    affected modules, superseded versions (history) and open or draft PRs that propose changing it
+    (pending_proposals). node_id is a decision id or the id of the PR, issue or doc."""
+    return t.trace_decision(org, node_id, question)
 
 
 @mcp.tool(annotations=READ)
@@ -73,7 +74,8 @@ def find_experts(org: str, module_or_topic: str, since: str | None = None) -> di
 
 @mcp.tool(annotations=READ)
 def module_owners(org: str, module: str) -> dict[str, Any]:
-    """Who owns a module: CODEOWNERS owners (people or teams) compared with the active experts, with
+    """Who owns a module: CODEOWNERS owners (people or teams) compared with the active experts (each
+    with up to 3 evidence PRs), the CODEOWNERS link (source id "codeowners"),
     paper owners (listed but inactive 12 months) and a mismatch flag. Says so when no owner is listed."""
     return t.module_owners(org, module)
 

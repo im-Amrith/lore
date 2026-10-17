@@ -38,12 +38,13 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | 07 | bus_factor | F4: people per module with a real, recent share of authored work (single points of failure first) |
 | 08 | collaborates_reset, collaborates, collaborates_strong | Derive `COLLABORATES` author -> reviewer, `weight` = distinct PRs; skips bots and self-reviews; `COLLABORATES_STRONG` (weight >= 2) for label propagation, which doesn't settle on the full graph |
 | 08 | pagerank, betweenness, label_propagation | `algo.pageRank` (most relied-on reviewers), `algo.betweenness` with fixed `samplingSeed` (F4 bridge people), `algo.labelPropagation` (F10 working groups, on COLLABORATES_STRONG) |
-| 03 | trace_decision | F1 why-trace: a decision's sources, the issues they close or reference, PROPOSED / APPROVED people, affected modules, SUPERSEDES history both ways, and open/draft PRs proposing to change it (a proposed decision sharing a module and a topic) |
+| 03 | trace_decision | F1 why-trace: a decision's sources, the issues they close or reference (top 6: closed and linking back first, then by `vec.cosineDistance` to the question), PROPOSED / APPROVED people, affected modules, SUPERSEDES history both ways, and open/draft PRs proposing to change it (a proposed decision sharing a module and a topic) |
 | 02 | entry_modules, entry_topics | Names in a question -> Module (path segment, most active first) and Topic (all name parts present) ids |
 | 05 | resolve_module, who_knows_topic | A module given by id, path or last segment -> Module id; F2 for a topic: authors and reviewers of PRs ABOUT it, time-decayed |
 | 09 | issue_text, module_decisions | Triage helpers: an issue's text (to embed it like stored issues); decisions affecting the modules where similar issues were fixed |
 | 11 | remember, recall_questions, what_changed | F6 memory: write User / Session / Question / Answer / CITED; read a user's past questions; query 11, cited nodes something newer SUPERSEDES or REFERENCES |
 | 10 | co_changed_reset, co_changed, impact_radius | Derive `CO_CHANGED` from commits touching 2-6 modules (bulk skipped); F8: co-changed modules with share of commits, active decisions and top experts |
+| 92 | check_evidence_prs | Eval only (golden q06): which cited PRs contain a person's non-bulk commits on a module |
 
 ## Setup
 

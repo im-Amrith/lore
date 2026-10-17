@@ -13,7 +13,8 @@ The 7-step loop (docs/PLAN.md "Navigator's loop"):
 The MCP session is a real client over stdio (python -m lore.mcp_server), so every tool call the
 answer depends on is a call the server logged. Tests may pass an in-process Client instead.
 `org` and `user_id` are hidden from the LLM and filled in by code, so a question can't read
-another org's graph or another user's memory.
+another org's graph or another user's memory. trace_decision also gets the user's question,
+verbatim, to rank the issues linked to a decision.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ from lore.llm.agent import agent_chat, flatten
 # Tools the LLM may choose. remember (step 7) is called by code; post_triage belongs to Steward.
 AGENT_TOOLS = ("find_entities", "trace_decision", "find_experts", "module_owners", "knowledge_risk",
                "related_work", "impact_radius", "recall")
-HIDDEN_ARGS = ("org", "user_id")
+HIDDEN_ARGS = ("org", "user_id", "question")  # question: trace_decision ranks linked issues by it
 
 # Step 1. Checked in order; the first rule with a matching phrase wins.
 INTENT_RULES: list[tuple[str, tuple[str, ...]]] = [
@@ -71,6 +72,11 @@ ANSWER_RULES = """Answer rules:
 - Every sentence cites one or more ids copied exactly from the tool results (decision:..., pr:...,
   issue:..., person:..., module:..., doc:..., chunk:..., team:..., commit:..., or "codeowners").
   Put ids only in cites, never in the sentence text; in text say "PR #2678", "issue #1", a login.
+- Cite the evidence the tools return: when you name an expert, also cite their evidence PRs
+  (pr:... ids); whenever you mention CODEOWNERS (an owner listed or not), cite "codeowners".
+- Name modules by their exact path as returned (graph/src/index), never a paraphrase ("the
+  index module"). Keep the decision's own technical terms from its statement, rationale, quote
+  and alternatives (e.g. "content-addressed cache", "delta"); don't swap them for synonyms.
 - For why questions give the reason (rationale), what problem it fixed (the issues), rejected
   alternatives if any, and who proposed and who approved it.
 - `decisions` are current. A `pending_proposals` entry is never current: say "a draft PR proposes
@@ -290,7 +296,8 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
                     result = {"error": "arguments are not a JSON object"}
                 else:
                     targs = {k: v for k, v in targs.items() if k not in HIDDEN_ARGS}
-                    full = {**targs, "org": org, **({"user_id": user} if tc["name"] == "recall" else {})}
+                    full = {**targs, "org": org, **({"user_id": user} if tc["name"] == "recall" else {}),
+                            **({"question": question} if tc["name"] == "trace_decision" else {})}
                     used += 1
                     log(f"  [tool {used}] {tc['name']} {targs}")
                     result = await _call(client, ev, tc["name"], full)

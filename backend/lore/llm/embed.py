@@ -21,6 +21,11 @@ MODEL_BATCH = 16  # texts per ONNX run: 256 long texts at once needs >1 GB for a
 @lru_cache
 def _model(name: str):
     from fastembed import TextEmbedding  # heavy import (onnxruntime); load on first use
+    import os
+    import sys
+
+    # stderr (stdout is the MCP channel): lets a run confirm the model loads once per process.
+    print(f"[embed] loading {name} in pid {os.getpid()}", file=sys.stderr, flush=True)
 
     # Downloaded once into data/cache/fastembed (gitignored), not the system temp dir.
     return TextEmbedding(model_name=name, cache_dir=str(EMBED_MODEL_DIR))

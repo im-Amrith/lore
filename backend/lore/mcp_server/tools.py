@@ -38,11 +38,12 @@ from lore.config import (
     RISK_BRIDGE_PEOPLE,
     RISK_MAX_MODULES,
     SIMILAR_MAX_DISTANCE,
+    TRACE_MAX_ISSUES,
     graph_name,
 )
 from lore.graph.client import get_db, get_graph, query, ro_query
 from lore.graph.queries import load_query
-from lore.graph.search import STOPWORDS, find_start, similar_issues
+from lore.graph.search import STOPWORDS, embed_query, find_start, similar_issues
 from lore.safety import check_approval, check_sandbox_repo, parse_issue_id
 
 ENTITY_LABELS = ("Decision", "Doc", "PullRequest", "Issue", "Module", "Topic")
@@ -265,13 +266,13 @@ def _trace_entry(run: Run, r: dict[str, Any]) -> dict[str, Any]:
     for s in r["sources"]:
         run.node(s["id"], s["url"])
         run.edge(d["id"], "DECIDED_IN", s["id"])
-    issues: dict[str, dict] = {}  # a PR often both CLOSES and REFERENCES the same issue
-    for i in r["issues"]:
+    for i in r["issues"]:  # ranked and capped by the query; rels: a PR often both CLOSES and REFERENCES
         run.node(i["id"], i["url"])
-        run.edge(i["via"], i["rel"], i["id"])
-        entry = issues.setdefault(i["id"], {**{k: v for k, v in i.items() if k != "rel"}, "rels": []})
-        entry["rels"].append(i["rel"])
-    d["issues"] = list(issues.values())
+        for rel in i["rels"]:
+            run.edge(i["via"], rel, i["id"])
+        if i.get("links_back"):
+            run.edge(i["id"], "REFERENCES", i["via"])
+    d["issue_count"] = r["issue_count"]
     for p in r["people"]:
         run.edge(p["id"], p["role"], d["id"])
     for m in r["modules"]:
@@ -279,10 +280,12 @@ def _trace_entry(run: Run, r: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
-def trace_decision(org: str, node_id: str) -> dict[str, Any]:
-    """Query 3: a decision's lineage. node_id is a Decision id or the PR / issue / doc it was decided in."""
+def trace_decision(org: str, node_id: str, question: str | None = None) -> dict[str, Any]:
+    """Query 3: a decision's lineage. node_id is a Decision id or the PR / issue / doc it was decided in.
+    question (optional) ranks the linked issues by distance to it, after the CLOSES / links-back tiers."""
     run = Run("trace_decision", org)
-    params = {"node_id": node_id, "min_confidence": DECISION_MIN_CONFIDENCE}
+    params = {"node_id": node_id, "min_confidence": DECISION_MIN_CONFIDENCE, "max_issues": TRACE_MAX_ISSUES,
+              "q_vec": embed_query(question) if question else None}
     rows = run.ro("trace_decision", params)
     # A superseded decision is history; trace what replaced it too, so the current one is shown.
     seen = {r["id"] for r in rows}
@@ -384,8 +387,13 @@ def module_owners(org: str, module: str) -> dict[str, Any]:
     run.node(m["id"])
     for o in r["owners"]:
         run.edge(o["id"], "OWNS", m["id"])
+    # Evidence for each active expert: their top 3 PRs on the module (query 5, same as find_experts).
+    evidence = {x["person_id"]: x["evidence"] or [] for x in run.ro("who_knows", {"module": m["id"], "since": 0})}
     for e in r["active_experts"]:
         run.edge(e["id"], "EXPERT_IN", m["id"])
+        e["evidence"] = evidence.get(e["id"], [])[:3]
+        for url in e["evidence"]:
+            run.node(id_from_url(url), url)
     names = {o["name"] for o in r["owners"]}
     top = r["active_experts"][0]["person"] if r["active_experts"] else None
     # Unknown when every owner is a team with no public members: we can't say who's on it.
@@ -399,10 +407,10 @@ def module_owners(org: str, module: str) -> dict[str, Any]:
         "mismatch": (not r["listed_owner"]) or bool(paper) or top_is_owner is False,
         "codeowners_url": codeowners, "other_matches": others,
     }
+    # The CODEOWNERS file is the evidence either way: an empty listing is what "no owner" rests on.
+    run.sources["codeowners"] = codeowners
     if not r["listed_owner"]:
         results["message"] = f"no owner is listed for {m['path']} in CODEOWNERS"
-    else:
-        run.sources["codeowners"] = codeowners
     return run.result(results)
 
 

@@ -68,7 +68,7 @@ questions:
     must_cite:
       - https://github.com/FalkorDB/FalkorDB/pull/2279
       - https://github.com/FalkorDB/FalkorDB/issues/2280
-    key_facts: ["Rust", "6.0", "master", "C engine", "main-rs"]
+    key_facts: ["Rust", "6.0", "master", "C engine"]  # main-rs dropped Oct 17: a detail, not the answer
     expected_path: "Decision -> DECIDED_IN -> PR #2279 (DvirDukhan) -> linked Issue #2280"
     checked_on: ""
     notes: "Neither page says WHY Rust (only the mechanics). If someone asks 'why Rust?', the correct Lore answer is 'not found in the sources' plus these links. Good test of the not-found behaviour."
@@ -119,9 +119,10 @@ questions:
     expected: >
       Avi Avni (AviAvni), by a wide margin: about 95% of human commits to graph/src/parser since Apr 2025,
       including recent lexer and syntax fixes.
-    must_cite:
-      - https://github.com/FalkorDB/FalkorDB/pull/2910
-      - https://github.com/FalkorDB/FalkorDB/pull/3060
+    # Was must_cite #2910 and #3060. Changed Oct 17 (approved): any PR that is evidence of
+    # AviAvni's work on graph/src/parser counts; checked by queries/92_check_evidence_prs.cypher.
+    must_cite: []
+    must_cite_evidence: {person: "person:AviAvni", module: "module:FalkorDB:graph/src/parser"}
     key_facts: ["AviAvni", "graph/src/parser"]
     expected_path: "Person -> EXPERT_IN -> Module graph/src/parser"
     checked_on: ""

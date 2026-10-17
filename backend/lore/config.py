@@ -93,6 +93,9 @@ SIMILAR_MAX_DISTANCE = 0.5  # similar issues further than this are not shown
 # but different issues sit at 0.19 (CSV clicks missing vs #9 CSV timeout; #6 vs #1), the demo issue 0.35 from #3.
 DUPLICATE_MAX_DISTANCE = 0.15
 
+# trace_decision: linked issues shown per decision (query 03 ranks them first).
+TRACE_MAX_ISSUES = 6
+
 # lore-mcp (M8): knowledge_risk lists at most this many modules with bus factor >= 1, and the
 # top RISK_BRIDGE_PEOPLE by betweenness.
 RISK_MAX_MODULES = 30

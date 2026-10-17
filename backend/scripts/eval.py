@@ -5,7 +5,8 @@
     (--no-cache: fresh LLM calls; --no-remember: don't write memory nodes)
 
 Scoring is deterministic, no LLM judge. A question passes when:
-  1. every must_cite URL is among the answer's citations,
+  1. every must_cite URL is among the answer's citations (and, for must_cite_evidence, at least
+     one cited PR is evidence of that person's work on that module: queries/92),
   2. every key fact appears in the answer text (or one of its ALIASES below),
   3. every sentence shown carries at least one citation a tool returned,
   4. for not-found tests (expect_not_found), the answer says not found / no reason recorded.
@@ -30,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lore.agents.navigator import ask, server_params  # noqa: E402
 from lore.config import REPO_ROOT, get_settings  # noqa: E402
+from lore.graph.client import get_graph, ro_query  # noqa: E402
 
 GOLDEN = REPO_ROOT / "docs" / "golden_set.yaml"
 OUT = REPO_ROOT / "docs" / "eval_results.md"
@@ -77,6 +79,12 @@ def score(case: dict, r: dict) -> dict:
     retrieved = {norm_url(u) for u in r["sources"].values()}
     musts = case.get("must_cite") or []
     missing_cites = [u for u in musts if norm_url(u) not in cited_urls]
+    if ev := case.get("must_cite_evidence"):
+        urls = [c["url"] for c in r["citations"] if c["url"] and "/pull/" in c["url"]]
+        hits = ro_query(get_graph(case["org"]), "check_evidence_prs", {**ev, "urls": urls})[0]["urls"] if urls else []
+        musts = [*musts, f"any evidence PR of {ev['person']} on {ev['module']}"]
+        if not hits:
+            missing_cites.append(musts[-1])
     facts = case.get("key_facts") or []
     missing_facts = [f for f in facts if not has_fact(f, r["answer"])]
     uncited = [s["text"] for s in r["sentences"] if not s["cites"]]
@@ -110,7 +118,8 @@ def write_report(rows: list[tuple[dict, dict | None, dict | None, str | None]], 
             continue
         notes = []
         for u, got in s["missing_cites"]:
-            notes.append(f"missing cite {u.rsplit('/', 2)[-2:][-1]} ({'retrieved, not cited' if got else 'never retrieved'})")
+            what = u if u.startswith("any ") else u.rsplit("/", 1)[-1]
+            notes.append(f"missing cite {what} ({'retrieved, not cited' if got else 'not cited' if what is u else 'never retrieved'})")
         if s["missing_facts"]:
             notes.append("missing facts: " + ", ".join(s["missing_facts"]))
         if "not_found" in s["checks"] and not s["checks"]["not_found"]:
