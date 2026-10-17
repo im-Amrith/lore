@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Core, ElementDefinition } from "cytoscape";
 import type { AskResult } from "@/lib/api";
+import { layeredPositions } from "@/lib/layout";
 import { KIND_COLOR, KIND_NAME, kindOf, longLabel, shortLabel, type Kind } from "@/lib/nodes";
+
+const SIZE_ON = 26;
+const SIZE_OFF = 14;
+const MAX_FIT_ZOOM = 1.3;
 
 const SHAPE: Partial<Record<Kind, string>> = {
   decision: "round-diamond", pr: "round-rectangle", issue: "ellipse", person: "ellipse",
@@ -11,17 +16,23 @@ const SHAPE: Partial<Record<Kind, string>> = {
 };
 
 /** The answer's subgraph. "Path" = the edges that touch a cited node (what the answer stands on). */
-function elements(r: AskResult, showAll: boolean): { els: ElementDefinition[]; counts: Map<Kind, number> } {
+function elements(
+  r: AskResult,
+  showAll: boolean,
+): { els: ElementDefinition[]; counts: Map<Kind, number>; positions: Record<string, { x: number; y: number }> } {
   const cited = new Set(r.citations.map((c) => c.id));
   const pathIds = new Set(r.path.map((e) => e.id));
   const onPath = new Set<string>([...cited]);
   r.path.forEach((e) => (onPath.add(e.source), onPath.add(e.target)));
 
-  // By default: everything connected by an edge, plus cited nodes. "All" adds the isolated
-  // starting candidates find_entities returned.
+  // By default: the walked path and the cited nodes, i.e. what the answer stands on plus the
+  // nodes directly attached to it. "All" adds everything else the tools retrieved (other
+  // search hits, READMEs, unrelated decisions and PRs).
   const shown = new Set<string>(onPath);
-  r.subgraph.edges.forEach((e) => (shown.add(e.source), shown.add(e.target)));
-  if (showAll) r.subgraph.nodes.forEach((n) => shown.add(n));
+  if (showAll) {
+    r.subgraph.edges.forEach((e) => (shown.add(e.source), shown.add(e.target)));
+    r.subgraph.nodes.forEach((n) => shown.add(n));
+  }
   shown.delete("codeowners");
 
   const counts = new Map<Kind, number>();
@@ -34,14 +45,18 @@ function elements(r: AskResult, showAll: boolean): { els: ElementDefinition[]; c
       classes: [onPath.has(id) ? "on" : "off", cited.has(id) ? "cited" : ""].join(" "),
     });
   }
-  for (const e of r.subgraph.edges) {
-    if (!shown.has(e.source) || !shown.has(e.target)) continue;
+  const edges = r.subgraph.edges.filter((e) => shown.has(e.source) && shown.has(e.target));
+  for (const e of edges) {
     els.push({
       data: { id: e.id, source: e.source, target: e.target, label: e.type.toLowerCase().replace(/_/g, " ") },
       classes: pathIds.has(e.id) ? "on" : "off",
     });
   }
-  return { els, counts };
+  const positions = layeredPositions(
+    [...shown].map((id) => ({ id, label: shortLabel(id, r.labels), size: onPath.has(id) ? SIZE_ON : SIZE_OFF })),
+    edges,
+  );
+  return { els, counts, positions };
 }
 
 export function EvidenceGraph({
@@ -83,15 +98,15 @@ export function EvidenceGraph({
               "text-margin-y": 5,
               "text-wrap": "ellipsis",
               "text-max-width": "130px",
-              width: 14,
-              height: 14,
+              width: SIZE_OFF,
+              height: SIZE_OFF,
               opacity: 0.4,
             },
           },
           {
             selector: "node.on",
             style: {
-              width: 26, height: 26, opacity: 1, "font-size": 11, color: "#1c2226",
+              width: SIZE_ON, height: SIZE_ON, opacity: 1, "font-size": 11, color: "#1c2226",
               "border-width": 2, "border-color": "#fffefb",
               "text-background-color": "#fffefb", "text-background-opacity": 0.85, "text-background-padding": "2px",
             },
@@ -115,11 +130,13 @@ export function EvidenceGraph({
             },
           },
         ],
-        layout: {
-          name: "cose", animate: false, padding: 36, nodeRepulsion: () => 9000, idealEdgeLength: () => 90,
-          randomize: false,
-        } as never,
+        layout: { name: "preset", positions: built.positions, fit: true, padding: 32 } as never,
       });
+      // A short path would be fitted at a huge zoom; keep it at reading size, centred.
+      if (inst.zoom() > MAX_FIT_ZOOM) {
+        inst.zoom(MAX_FIT_ZOOM);
+        inst.center();
+      }
       inst.on("tap", "node", (e) => setPicked(e.target.id()));
       inst.on("tap", (e) => e.target === inst && setPicked(null));
       inst.on("mouseover", "node", (e) => onFocus(e.target.id()));
@@ -167,7 +184,17 @@ export function EvidenceGraph({
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="accent-accent" />
           all retrieved nodes
         </label>
-        <button onClick={() => cy.current?.fit(undefined, 36)} className="rounded px-1.5 py-0.5 hover:bg-sunk hover:text-ink">
+        <button
+          onClick={() => {
+            const inst = cy.current;
+            if (!inst) return;
+            inst.fit(undefined, 32);
+            if (inst.zoom() > MAX_FIT_ZOOM) {
+              inst.zoom(MAX_FIT_ZOOM);
+              inst.center();
+            }
+          }}
+          className="rounded px-1.5 py-0.5 hover:bg-sunk hover:text-ink">
           Fit
         </button>
       </div>

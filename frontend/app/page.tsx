@@ -125,10 +125,12 @@ export default function AskPage() {
         </div>
       )}
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      {/* Wide: chat and graph side by side, each scrolling on its own. Below 1024 px: one column,
+          the page scrolls, the graph sits under the chat and the composer stays pinned. */}
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:overflow-hidden">
         {/* Chat */}
-        <section className="flex min-h-0 flex-col border-line lg:border-r" aria-label="Questions and answers">
-          <div className="scroll-quiet min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6">
+        <section className="flex flex-col border-line lg:min-h-0 lg:border-r" aria-label="Questions and answers">
+          <div className="scroll-quiet space-y-5 px-5 py-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {turns.length === 0 ? (
               <div className="mx-auto max-w-md pt-10">
                 <h1 className="font-serif text-[28px] leading-tight text-ink">
@@ -181,7 +183,7 @@ export default function AskPage() {
               e.preventDefault();
               ask(draft);
             }}
-            className="border-t border-line bg-surface/70 p-3"
+            className="sticky bottom-0 z-10 border-t border-line bg-surface/95 p-3 backdrop-blur lg:static lg:bg-surface/70"
           >
             <div className="flex items-end gap-2 rounded-xl border border-line-strong bg-surface px-3 py-2 focus-within:border-accent">
               <textarea
@@ -210,7 +212,7 @@ export default function AskPage() {
         </section>
 
         {/* Evidence */}
-        <section className="hidden min-h-0 bg-surface/40 lg:block" aria-label="Evidence path">
+        <section className="h-[min(560px,80dvh)] shrink-0 border-t border-line bg-surface/40 lg:h-auto lg:min-h-0 lg:border-t-0" aria-label="Evidence path">
           <EvidenceGraph result={active} focusId={focusId} onFocus={setFocusId} />
         </section>
       </main>
