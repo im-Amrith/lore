@@ -1,0 +1,12 @@
+# Only backend/, queries/, docs/TOPICS.md and data/snapshots/ go into the image (see Dockerfile).
+.git
+.env
+.env.*
+frontend
+data/raw
+data/cache
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+backend/tests

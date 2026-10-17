@@ -73,7 +73,20 @@ uv run --directory backend python scripts/tasks.py                            # 
 uv run --directory backend python scripts/steward.py                          # Steward worker: new issues -> Tasks -> drafts (--poll 60, --no-intake)
 uv run --directory backend uvicorn lore.api.app:app --port 8000               # API (+ Steward polling the sandbox every 60 s), docs at http://localhost:8000/docs
 cd frontend; copy .env.example .env.local; npm install; npm run dev           # UI on http://localhost:3001
+uv run --directory backend python scripts/snapshot.py                         # local graphs -> data/snapshots (release assets for deploy)
+uv run --directory backend python scripts/restore.py                          # v0.1-snapshot release -> local FalkorDB (no keys needed)
 ```
+
+**Without GitHub or LLM keys** (the demo graphs as deployed): start FalkorDB, then load the snapshot from the [`v0.1-snapshot` release](https://github.com/im-Amrith/lore/releases/tag/v0.1-snapshot) instead of fetching, extracting and embedding:
+
+```powershell
+docker compose up -d falkordb
+cd backend; uv sync; cd ..
+uv run --directory backend python scripts/restore.py      # downloads lore.rdb + cached answers, verifies, loads (replaces local graphs)
+uv run --directory backend uvicorn lore.api.app:app --port 8000
+```
+
+Asking new questions still needs a free-tier LLM key (`LLM_FAST_API_KEY` or `LLM_SMART_API_KEY`); the cached demo answers don't.
 
 ### Frontend
 
@@ -115,6 +128,87 @@ cd frontend; copy .env.example .env.local; npm install; npm run dev           # 
 
 The LLM pool then writes the comment from those facts, following the Playbook's steps. Links that no tool returned are stripped, and the draft and its facts are stored on the Task. Nothing is posted until a human approves in the triage inbox. If the human edits the draft first, the edit becomes a `Feedback` node that `ADJUSTS` the `Playbook`, and the rule it teaches is added to the Playbook's steps: the human's own words, or one LLM call that generalises the edit. The next draft follows it.
 
+## Deploy
+
+The live demo runs on one AWS EC2 server (Ubuntu 24.04, t3.medium, Elastic IP `13.237.159.217`) and Vercel:
+
+| Part | Where | URL |
+| --- | --- | --- |
+| Frontend (Next.js) | Vercel | set after `vercel deploy`, see below |
+| Backend API + Steward | EC2, Docker | https://13-237-159-217.sslip.io (docs at `/docs`) |
+| FalkorDB | EC2, Docker, same compose project | not exposed; only the backend reaches it |
+
+Why not a free host: the backend holds the embedding model and lore-mcp in process (~1 GB with FalkorDB), more than the 512 MB free tiers; Hugging Face Docker Spaces need a paid plan; FalkorDB Cloud's free tier (100 MB, no persistence, deleted after 7 idle days) can't safely hold the ~90 MB FalkorDB graph. So FalkorDB runs next to the backend, loaded from a snapshot.
+
+**The graphs come from a snapshot, not a rebuild.** `backend/scripts/snapshot.py` saves the local FalkorDB (after checking that no graph holds an email address) and packs the answer cache; the files are attached to the [`v0.1-snapshot` release](https://github.com/im-Amrith/lore/releases/tag/v0.1-snapshot) (`lore.rdb`, `answers.tar.gz`, `SHA256SUMS`), never committed. Deploying fetches nothing from the GitHub API for the graph and makes no LLM extraction calls.
+
+### Backend on EC2
+
+`deploy/docker-compose.yml` runs three containers with `restart: unless-stopped` (the Docker service is enabled at boot, so they come back after a reboot):
+
+- `falkordb`: the pinned FalkorDB image, data in `/opt/lore/state/falkordb` (seeded once with `lore.rdb`; FalkorDB's own saves keep questions, Tasks and Feedback across restarts)
+- `backend`: the root `Dockerfile` (Python 3.11, locked deps, the embedding model baked in), uvicorn on 8000, caches in `/opt/lore/state/cache`
+- `caddy`: HTTPS on 80/443 with an automatic Let's Encrypt certificate for `<ip-with-dashes>.sslip.io` (sslip.io resolves that name to the IP, so no DNS setup); streams `/ask/stream` unbuffered
+
+1. Security group: inbound 22, 80, 443.
+2. Create the secrets file on the server by hand (never in git):
+
+   ```bash
+   sudo mkdir -p /opt/lore && sudo nano /opt/lore/.env && sudo chmod 600 /opt/lore/.env
+   ```
+
+   | Variable | Value |
+   | --- | --- |
+   | `LORE_DOMAIN` | `13-237-159-217.sslip.io` (Caddy's site address) |
+   | `CORS_ORIGINS` | the Vercel URL, e.g. `https://lore-xyz.vercel.app` (comma-separate several) |
+   | `DEMO_ORG` | `FalkorDB` |
+   | `SANDBOX_REPO` | `im-Amrith/lore-sandbox` |
+   | `GITHUB_TOKEN` | fine-grained token: public read, plus Issues read/write on lore-sandbox only (Steward's poll and the approved comment) |
+   | `GITHUB_WEBHOOK_SECRET` | the secret set on the lore-sandbox webhook |
+   | `TRIAGE_APPROVAL_SECRET` | any long random string (`python -c "import secrets; print(secrets.token_hex(32))"`) |
+   | `LLM_FAST_BASE_URL`, `LLM_FAST_API_KEY`, `LLM_FAST_MODEL` | Gemini OpenAI-compatible endpoint, free-tier key |
+   | `LLM_SMART_BASE_URL`, `LLM_SMART_API_KEY`, `LLM_SMART_MODEL` | Groq, free-tier key |
+   | `DRY_RUN` | `true` until the demo; `false` posts approved triage comments to lore-sandbox |
+   | `STEWARD_POLL_SECONDS` | `60` (the poll is the webhook's fallback) |
+   | optional: `EMBEDDING_MODEL`, `EMBEDDING_DIM`, `LLM_DAILY_CALL_CAP`, `ASK_PER_MINUTE`, `ASK_PER_DAY` | defaults as in `.env.example` |
+
+   `FALKORDB_HOST` and `FALKORDB_PORT` are set by the compose file.
+3. Run the setup script over SSH (installs Docker, clones the repo to `/opt/lore`, downloads and verifies the snapshot, seeds FalkorDB, builds and starts everything, waits for HTTPS):
+
+   ```powershell
+   scp -i lore.pem deploy/ec2-setup.sh ubuntu@13.237.159.217:~
+   ssh -i lore.pem ubuntu@13.237.159.217 "bash ec2-setup.sh"
+   ```
+
+   Run it again to deploy new code: it pulls `main`, rebuilds and keeps the graph's runtime state (`--reset-graph` reloads the snapshot).
+4. Pre-warm the demo answers (cached answers from the release are hits; the rest cost a few free-tier calls):
+
+   ```bash
+   cd /opt/lore && sudo docker compose --env-file .env -f deploy/docker-compose.yml exec backend .venv/bin/python scripts/warm.py
+   ```
+
+Logs: `sudo docker compose --env-file /opt/lore/.env -f /opt/lore/deploy/docker-compose.yml logs -f backend`. After editing `.env`: the same command with `up -d` (recreates the backend with the new values).
+
+### Frontend on Vercel
+
+```powershell
+cd frontend
+vercel login
+vercel deploy --prod --build-env NEXT_PUBLIC_API_URL=https://13-237-159-217.sslip.io --env NEXT_PUBLIC_API_URL=https://13-237-159-217.sslip.io
+```
+
+`NEXT_PUBLIC_API_URL` is read at build time. Put the Vercel URL in the server's `CORS_ORIGINS` and run `up -d` (step above).
+
+### Webhook
+
+The lore-sandbox webhook sends `issues` events to `https://13-237-159-217.sslip.io/webhook/github` (content type JSON, secret = `GITHUB_WEBHOOK_SECRET`); the backend checks `X-Hub-Signature-256`. Created with:
+
+```powershell
+gh api repos/im-Amrith/lore-sandbox/hooks -f name=web -F active=true -f "events[]=issues" -f config[url]=https://13-237-159-217.sslip.io/webhook/github -f config[content_type]=json -f config[secret]=<GITHUB_WEBHOOK_SECRET>
+```
+
+The 60-second poll stays on as a fallback, so a missed delivery is still drafted within a minute.
+
 ## Demo
 
 _TBD._
@@ -131,5 +225,6 @@ This project is built with Claude Code (Anthropic) as a coding assistant. The pl
 - M9 Navigator + eval (`agents/navigator.py`, `llm/agent.py`, `scripts/ask.py`, `scripts/eval.py`, eval fields for the sandbox and Bolt entries in `golden_set.yaml`): written with Claude Code. The Navigator itself runs on Gemini `gemini-3.8-flash` with Groq `gpt-oss-120b` as fallback; the eval scores its answers deterministically (no LLM judge).
 - M11 Ask screen (`frontend/`, `POST /ask/stream`, node labels and pending flags in Navigator answers): written with Claude Code.
 - M10 API (`backend/lore/api/`, queries 13 and 14, `ingest/tasks.py`, `scripts/tasks.py`, API tests): written with Claude Code.
+- M14 Deploy (`Dockerfile`, `deploy/docker-compose.yml`, `deploy/Caddyfile`, `deploy/ec2-setup.sh`, `scripts/snapshot.py`, `scripts/restore.py`, the deploy docs): written with Claude Code, including the free-host comparison that led to EC2.
 - M13 Steward (`agents/steward.py`, `ingest/live.py`, the work-board, intake and Playbook queries in 13, the work-board MCP tools, webhook, poll loop, approve with Feedback, real posting behind `DRY_RUN`, `scripts/steward.py`, the triage inbox screen, `tests/test_steward.py`): written with Claude Code. The related-issue distance (0.30) and reviewer threshold (0.1) were checked against the two demo issues on a copy of the sandbox graph. The drafts and the rules learned from edits are written by the free-tier agent pool; the owner, reviewer and related issues are picked by code from tool results.
 - M6 embeddings (`ingest/embed.py`, `graph/search.py`, queries 02, 09 and 21, `scripts/embed.py`, `scripts/find.py`): written with Claude Code, including the fusion tuning against q01-q04 and s01 (measured ranks are in `queries/02_entry_decisions.cypher`). Embeddings run locally with fastembed (`BAAI/bge-small-en-v1.5`).

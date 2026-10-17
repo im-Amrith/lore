@@ -1,5 +1,6 @@
 """Settings read from env vars (and the repo-root .env). See .env.example."""
 
+import os
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -15,7 +16,8 @@ RAW_DIR = DATA_DIR / "raw"
 CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 LLM_CACHE_DIR = CACHE_DIR / "llm"
-EMBED_MODEL_DIR = CACHE_DIR / "fastembed"
+# The deployed image keeps the model outside the data volume (FASTEMBED_CACHE, see Dockerfile).
+EMBED_MODEL_DIR = Path(os.environ.get("FASTEMBED_CACHE") or CACHE_DIR / "fastembed")
 TOPICS_FILE = REPO_ROOT / "docs" / "TOPICS.md"
 
 # Separate graph for the healthcheck so test nodes never land in an org graph.

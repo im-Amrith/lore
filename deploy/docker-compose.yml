@@ -1,0 +1,57 @@
+# Lore on one server (AWS EC2): FalkorDB, the backend and Caddy (HTTPS). deploy/ec2-setup.sh runs it:
+#   sudo docker compose --env-file /opt/lore/.env -f deploy/docker-compose.yml up -d --build
+# State lives in /opt/lore/state (bind mounts, outside git): the FalkorDB data dir, seeded once from the
+# v0.1-snapshot release, and the LLM / answer caches. restart: unless-stopped + the Docker service
+# enabled at boot = everything comes back after a reboot.
+
+name: lore
+
+services:
+  falkordb:
+    # The FalkorDB build the snapshot was made with (falkordb/falkordb:latest on Oct 17).
+    image: falkordb/falkordb@sha256:b0bdcac2cbaff989e77cb0610439b7a9289e86de033ccbbd4368b66fb680ae7a
+    environment:
+      BROWSER: "0"  # no FalkorDB Browser on the server
+    volumes:
+      - ../state/falkordb:/var/lib/falkordb/data  # dump.rdb: the snapshot, then saved by FalkorDB
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 30  # loading the 33 MB snapshot takes a few seconds
+    # Not published: only the backend reaches it, on the compose network.
+
+  backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    env_file: ../.env
+    environment:
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: "6379"
+    volumes:
+      - ../state/cache:/app/data/cache  # answer cache (seeded from the release), LLM cache, endpoint state
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10.0-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      LORE_DOMAIN: ${LORE_DOMAIN:?set LORE_DOMAIN in .env, e.g. 13-237-159-217.sslip.io}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # Let's Encrypt certificates: keep them across restarts (rate limits)
+      - caddy-config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

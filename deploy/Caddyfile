@@ -1,0 +1,9 @@
+# HTTPS for the Lore API. Caddy gets a Let's Encrypt certificate for $LORE_DOMAIN on its own
+# (<ip-with-dashes>.sslip.io resolves to the server's IP, so no DNS setup is needed).
+{$LORE_DOMAIN} {
+	encode gzip
+	reverse_proxy backend:8000 {
+		# POST /ask/stream sends NDJSON lines as the Navigator works: pass each one on at once.
+		flush_interval -1
+	}
+}

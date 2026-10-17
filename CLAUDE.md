@@ -95,6 +95,9 @@ uv run --directory backend python scripts/eval.py               # golden set: re
 uv run --directory backend python scripts/warm.py               # pre-answer the demo questions into the answer cache (--check: report only, no LLM)
 uv run --directory backend python scripts/tasks.py              # Librarian: open triage Tasks for open sandbox issues (--issue 9 10)
 uv run --directory backend python scripts/steward.py            # Steward worker: new sandbox issues -> Tasks -> drafts (--poll 60, --no-intake)
+uv run --directory backend python scripts/snapshot.py           # local graphs -> data/snapshots/{lore.rdb,answers.tar.gz,SHA256SUMS} for the v0.1-snapshot release (--no-export)
+uv run --directory backend python scripts/restore.py            # v0.1-snapshot release -> local FalkorDB + answer cache (replaces local graphs; --yes)
+scp -i lore.pem deploy/ec2-setup.sh ubuntu@13.237.159.217:~; ssh -i lore.pem ubuntu@13.237.159.217 "bash ec2-setup.sh"   # deploy/update EC2 (README Deploy)
 uv run --directory backend uvicorn lore.api.app:app --port 8000 # API + Steward poll (STEWARD_POLL_SECONDS); OpenAPI docs at http://localhost:8000/docs
 cd frontend; npm install; npm run dev; cd ..                   # UI on http://localhost:3001 (API URL: frontend/.env.local, NEXT_PUBLIC_API_URL)
 ```
