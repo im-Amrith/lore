@@ -609,11 +609,12 @@ query($owner: String!, $name: String!, $ref: String!, {var_decls}) {{
 # Git (commits)
 # ---------------------------------------------------------------------------
 
-def _git(git_dir: Path, *args: str, stdin: str | None = None, env: dict[str, str] | None = None) -> str:
+def _git(git_dir: Path, *args: str, stdin: str | None = None, env: dict[str, str] | None = None,
+         check: bool = True) -> str:
     cmd = ["git", "-C", str(git_dir), "-c", "core.quotepath=false", "-c", "i18n.logOutputEncoding=UTF-8", *args]
     res = subprocess.run(cmd, capture_output=True, input=stdin.encode() if stdin is not None else None,
                          env={**os.environ, **env} if env else None)
-    if res.returncode != 0:
+    if check and res.returncode != 0:
         raise RuntimeError(f"git {' '.join(args[:2])} failed: {res.stderr.decode('utf-8', 'replace')[:500]}")
     return res.stdout.decode("utf-8", "replace")
 
@@ -663,8 +664,10 @@ def prefetch_blobs(git_dir: Path, branches: list[str], since: datetime, log: Cal
     raw = _git(git_dir, "log", *[f"origin/{b}" for b in branches], f"--since={since.isoformat()}",
                "--raw", "--no-abbrev", "--no-renames", "--format=")
     oids = raw_blob_ids(raw)
+    # Older git (2.39, Debian bookworm) exits non-zero when some objects are missing, which is the
+    # point of the check; the "missing" lines are still printed, so the exit code is ignored here.
     check = _git(git_dir, "cat-file", "--batch-check", stdin="\n".join(sorted(oids)) + "\n",
-                 env={"GIT_NO_LAZY_FETCH": "1"})
+                 env={"GIT_NO_LAZY_FETCH": "1"}, check=False)
     missing = [l.split()[0] for l in check.splitlines() if l.endswith(" missing")]
     log(f"  blobs: {len(oids)} needed, {len(missing)} to fetch")
     for start in range(0, len(missing), 2000):

@@ -76,7 +76,7 @@ def _iso(ts: float) -> str:
 def prime(repo: str, log: Callable[[str], None] = print) -> bool:
     """Fetch the repo's whole raw cache once (a fresh server has none). False if it was there."""
     check_sandbox_repo(repo)
-    if (_repo_dir(repo) / "prs.json").exists():
+    if (_repo_dir(repo) / "commits.json").exists():  # the last file fetch_repo writes
         return False
     owner, name = repo.split("/")
     since = datetime.now(timezone.utc) - timedelta(days=FETCH_SINCE_DAYS)
