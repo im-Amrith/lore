@@ -132,7 +132,7 @@ AGENT_LLM_POOL: list[tuple[str, str, str, bool]] = [
     ("gemini", "LLM_FAST_API_KEY", "gemini-3.8-flash", True),
     ("groq", "LLM_SMART_API_KEY", "openai/gpt-oss-120b", True),
     ("gemini", "LLM_FAST_API_KEY", "gemini-3.6-flash", True),
-    ("groq", "LLM_SMART_API_KEY", "llama-3.3-70b-versatile", False),  # json_object + schema in the prompt
+    ("groq", "LLM_SMART_API_KEY", "openai/gpt-oss-20b", True),
     ("gemini", "LLM_FAST_API_KEY", "gemini-3.5-flash-lite", True),
 ]
 AGENT_LLM_STATE = LLM_CACHE_DIR / "endpoint_state.json"  # cooldowns and exhausted endpoints, shared by runs
