@@ -195,8 +195,8 @@ def agent_chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | Non
             count_call("agent")
             t0 = time.monotonic()
             try:
-                resp = _client(ep["base_url"], ep["api_key"]).with_options(timeout=AGENT_TIMEOUT).chat.completions.create(
-                    **_kwargs(ep, messages, tools, tool_choice, json_schema))
+                resp = _client(ep["base_url"], ep["api_key"]).chat.completions.create(
+                    **_kwargs(ep, messages, tools, tool_choice, json_schema), timeout=AGENT_TIMEOUT)
                 out = {**_message(resp), "model": ep["model"], "endpoint": ep["label"],
                        "seconds": round(time.monotonic() - t0, 1)}
                 if json_schema and not out["content"].strip():
