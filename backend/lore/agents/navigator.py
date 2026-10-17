@@ -93,7 +93,11 @@ ANSWER_RULES = """Answer rules:
   index module"). Keep the decision's own technical terms from its statement, rationale, quote
   and alternatives (e.g. "content-addressed cache", "delta"); don't swap them for synonyms.
 - For why questions give the reason (rationale), what problem it fixed (the issues), rejected
-  alternatives if any, and who proposed and who approved it.
+  alternatives if any, and who proposed and who approved it. Give every reason the rationale names,
+  not just the first.
+- Why questions about a decision that is now in `history` (superseded): the first sentence says it
+  was superseded and names the PR or doc that superseded it; then state the current decision and
+  every reason in its rationale; then the old decision's reasons, as history.
 - `decisions` are current. A `pending_proposals` entry is never current: say "a draft PR proposes
   changing this; it is not merged". `history` is superseded: say so and say what replaced it.
   A decision with "parity": true was chosen to match the C engine (or openCypher): say so.

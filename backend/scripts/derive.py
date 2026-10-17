@@ -57,7 +57,7 @@ def derive(g, now: int) -> None:
     for job in DERIVE_JOBS:
         t = time.perf_counter()
         params = {"now": now, "max_modules": CO_CHANGE_MAX_MODULES, "min_count": CO_CHANGE_MIN_COUNT,
-                  "min_weight": LPA_MIN_WEIGHT}
+                  "min_weight": LPA_MIN_WEIGHT, "modules": None}  # None: the whole graph
         rows = query(g, job, params)
         print(f"  {job:<18} {rows[0] if rows else {}}  ({time.perf_counter() - t:.2f}s)")
 

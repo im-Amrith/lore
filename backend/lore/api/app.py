@@ -13,7 +13,8 @@ Routes, one per UI screen (docs/PLAN.md "UI screens"):
   POST /triage/{task}/redraft       put a drafted Task back on the board and let Steward draft it again
   POST /triage/sync                 check SANDBOX_REPO for new issues now and draft them
   GET  /playbook                    Steward's triage Playbook and the Feedback that adjusted it
-  POST /webhook/github              sandbox issue events (signature checked): load the issue, open a Task
+  POST /webhook/github              sandbox issue events (signature checked): load the issue, open a Task;
+                                    pull_request closed + merged: sync that PR (M15: new decisions, supersession)
   GET  /memory/{user}               past questions and what changed since
   GET  /users, POST /users          username picker (no passwords)
   GET  /health                      graphs, data versions, LLM endpoint states
@@ -21,6 +22,8 @@ Routes, one per UI screen (docs/PLAN.md "UI screens"):
 Steward (M13): with STEWARD_POLL_SECONDS > 0 the API polls SANDBOX_REPO for new issues (default every
 60 s, so no tunnel is needed locally); the deployed backend gets the same events from the webhook.
 Either way the Librarian loads the issue and opens a Task, then Steward claims and drafts it.
+M15: a merged PR (webhook, or the same poll checking for merges the graph lacks) is synced: the PR,
+its commits and docs are re-fetched, its decisions become current and replace the ones they supersede.
 
 /ask, Steward and the approve route go through lore-mcp (an in-process MCP session opened at startup:
 the same server and protocol as stdio, without a second process loading the embedding model).
@@ -54,7 +57,7 @@ from lore.api.ratelimit import RateLimiter
 from lore.config import DECISION_MIN_CONFIDENCE, PLAYBOOK_DEFAULT_STEPS, PLAYBOOK_NAME, get_settings, graph_name
 from lore.graph.client import get_db, get_graph, query, ro_query
 from lore.graph.queries import load_query
-from lore.ingest import live
+from lore.ingest import live, sync
 from lore.llm.agent import load_state
 from lore.llm.chat import LLMError
 from lore.mcp_server import tools
@@ -111,6 +114,7 @@ async def lifespan(app: FastAPI):
     async with Client(mcp) as client:
         app.state.mcp = client
         app.state.steward = {"agent": steward.agent_name(), "last_tick": None, "last_error": None}
+        app.state.sync = {"last": None, "last_error": None, "running": False}
         app.state.background = set()
         poll = None
         if settings.sandbox_repo and settings.steward_poll_seconds > 0:
@@ -151,7 +155,8 @@ def health() -> dict[str, Any]:
             out[o] = {"graph": graph_name(o), "missing": True}
     now = time.time()
     llm = {k: v for k, v in load_state().items() if v.get("until", 0) > now}
-    return {"orgs": out, "sandbox_repo": settings.sandbox_repo, "llm_endpoints_unavailable": llm}
+    return {"orgs": out, "sandbox_repo": settings.sandbox_repo, "llm_endpoints_unavailable": llm,
+            "sync": getattr(app.state, "sync", None)}
 
 
 # ---------------------------------------------------------------- Ask
@@ -293,6 +298,35 @@ async def steward_tick(issues: list[dict[str, Any]] | None = None, force: bool =
     return state
 
 
+_sync_lock = asyncio.Lock()
+
+
+async def sync_tick(numbers: list[int] | None = None, simulate: bool = False) -> dict[str, Any] | None:
+    """M15: sync merged PRs (these, or whatever the poll finds merged on GitHub but not in the graph).
+    One sync at a time; a second trigger for the same merge then finds nothing left to do."""
+    repo = settings.sandbox_repo
+    async with _sync_lock:
+        app.state.sync["running"] = True
+        try:
+            if numbers:
+                states = await anyio.to_thread.run_sync(lambda: ro_query(
+                    get_graph(repo.split("/")[0]), "pr_states", {"ids": [f"pr:{repo}#{n}" for n in numbers]}))
+                numbers = [n for n, s in zip(numbers, states) if not s["merged_at"]]  # already synced: skip
+                if not numbers:
+                    return None
+                r = await anyio.to_thread.run_sync(lambda: sync.sync_merged(repo, numbers, simulate, log=log.info))
+            else:
+                r = await anyio.to_thread.run_sync(lambda: sync.sync_check(repo, log=log.info))
+        finally:
+            app.state.sync["running"] = False
+    if r:
+        app.state.sync.update(last={k: r[k] for k in ("prs", "promoted", "extracted", "superseded", "modules",
+                                                       "seconds", "steps", "simulated")} | {"at": int(time.time())},
+                              last_error=None)
+        log.info("sync: PR %s in %ss %s", r["prs"], r["seconds"], r["steps"])
+    return r
+
+
 async def _steward_poll() -> None:
     while True:
         try:
@@ -302,6 +336,13 @@ async def _steward_poll() -> None:
         except Exception as e:  # noqa: BLE001 - GitHub or the LLM pool down: log it, try next minute
             app.state.steward["last_error"] = f"{type(e).__name__}: {e}"
             log.warning("steward poll failed: %s: %s", type(e).__name__, e)
+        try:
+            await sync_tick()  # the webhook's fallback: a merge it missed is synced within a minute
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            app.state.sync["last_error"] = f"{type(e).__name__}: {e}"
+            log.warning("sync poll failed: %s: %s", type(e).__name__, e)
         await asyncio.sleep(settings.steward_poll_seconds)
 
 
@@ -327,6 +368,14 @@ async def github_webhook(request: Request) -> dict[str, Any]:
     if event == "ping":
         return {"ok": True, "event": "ping"}
     repo = (payload.get("repository") or {}).get("full_name", "")
+    if event == "pull_request":
+        pr = payload.get("pull_request") or {}
+        if payload.get("action") != "closed" or not pr.get("merged"):
+            return {"ok": True, "ignored": f"pull_request {payload.get('action', '')}".strip()}
+        if repo.lower() != settings.sandbox_repo.lower():
+            raise HTTPException(403, f"{repo} is not the sandbox repo")
+        _in_background(sync_tick([int(pr["number"])], simulate=settings.sync_simulate_merge))
+        return {"ok": True, "event": "pull_request", "action": "merged", "pr": pr["number"]}
     if event != "issues" or payload.get("action") not in ("opened", "reopened", "edited"):
         return {"ok": True, "ignored": f"{event} {payload.get('action', '')}".strip()}
     if repo.lower() != settings.sandbox_repo.lower():

@@ -6,6 +6,7 @@
 // t.at <= $now lets the job be rerun "as of" an earlier date.
 MATCH (p:Person)-[:AUTHORED]->(c:Commit)-[t:TOUCHES]->(m:Module)
 WHERE NOT coalesce(p.is_bot, false) AND NOT coalesce(c.bulk, false) AND t.at <= $now
+  AND ($modules IS NULL OR m.id IN $modules)
 WITH p, m,
      sum(exp(-0.693 * ($now - t.at) / 15552000.0)) AS s,
      max(t.at) AS last,

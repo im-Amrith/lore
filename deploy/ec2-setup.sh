@@ -77,7 +77,7 @@ fi
 
 # ------------------------------------------------------------------ the snapshot (GitHub release)
 SNAP="$APP_DIR/state/snapshot"
-sudo mkdir -p "$SNAP" "$APP_DIR/state/falkordb" "$APP_DIR/state/cache/answers"
+sudo mkdir -p "$SNAP" "$APP_DIR/state/falkordb" "$APP_DIR/state/cache/answers" "$APP_DIR/state/raw"
 log "Downloading the graph snapshot"
 for f in SHA256SUMS lore.rdb answers.tar.gz; do
   sudo curl -fsSL --retry 3 -o "$SNAP/$f.new" "$SNAPSHOT_URL/$f"
@@ -99,6 +99,8 @@ sudo tar -xzf "$SNAP/answers.tar.gz" -C "$APP_DIR/state/cache/answers" --skip-ol
 log "Building and starting FalkorDB, backend, Caddy"
 "${COMPOSE[@]}" up -d --build --remove-orphans
 sudo docker image prune -f >/dev/null
+# M15: the sandbox's raw GitHub cache, fetched once (a merged PR's sync updates it). Kept in state/raw.
+"${COMPOSE[@]}" exec -T backend .venv/bin/python scripts/sync.py --prime || echo "prime failed; the sync will retry"
 
 DOMAIN="$(sudo grep -E '^LORE_DOMAIN=' "$APP_DIR/.env" | cut -d= -f2- | tr -d '"'"'"' ')"
 log "Waiting for https://$DOMAIN/health (Caddy gets its certificate on the first request)"

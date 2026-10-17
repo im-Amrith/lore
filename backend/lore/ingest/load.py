@@ -49,8 +49,10 @@ def create_indexes(graph: Graph, log: Callable[[str], None] = print) -> None:
     log(f"  indexes: {created} created (others existed)")
 
 
-def load_rows(graph: Graph, rows: Rows, log: Callable[[str], None] = print) -> None:
-    create_indexes(graph, log)
+def load_rows(graph: Graph, rows: Rows, log: Callable[[str], None] = print, indexes: bool = True) -> None:
+    """indexes=False: skip creating indexes (a sync on a graph that has them)."""
+    if indexes:
+        create_indexes(graph, log)
     for attr, name in STEPS:
         items = getattr(rows, attr)
         for start in range(0, len(items), BATCH):

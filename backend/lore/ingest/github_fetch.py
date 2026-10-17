@@ -418,21 +418,31 @@ query($org: String!, $first: Int!, $after: String) {{
   }}
 }}"""
 
+PR_FIELDS = f"""
+        id number title body state isDraft url createdAt updatedAt closedAt mergedAt
+        author {ACTOR} mergedBy {ACTOR}
+        baseRefName headRefName mergeCommit {{ oid }}
+        additions deletions changedFiles
+        labels(first: 20) {{ nodes {{ name }} }}
+        {_nested_block(PR_NESTED)}"""
+
 PRS_QUERY = f"""
 query($owner: String!, $name: String!, $first: Int!, $after: String) {{
   {RATE}
   repository(owner: $owner, name: $name) {{
     pullRequests(first: $first, after: $after, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{
       {PAGE}
-      nodes {{
-        id number title body state isDraft url createdAt updatedAt closedAt mergedAt
-        author {ACTOR} mergedBy {ACTOR}
-        baseRefName headRefName mergeCommit {{ oid }}
-        additions deletions changedFiles
-        labels(first: 20) {{ nodes {{ name }} }}
-        {_nested_block(PR_NESTED)}
-      }}
+      nodes {{ {PR_FIELDS} }}
     }}
+  }}
+}}"""
+
+# One PR by number (M15 sync: re-fetch just the PR that was merged).
+PR_QUERY = f"""
+query($owner: String!, $name: String!, $number: Int!) {{
+  {RATE}
+  repository(owner: $owner, name: $name) {{
+    pullRequest(number: $number) {{ {PR_FIELDS} }}
   }}
 }}"""
 
@@ -518,6 +528,15 @@ def fetch_prs(gh: GitHub, owner: str, name: str, since: datetime, out: ItemStrea
         complete=lambda n: _complete_nested(gh, "PullRequest", n, PR_NESTED),
         stop=lambda n: iso_to_epoch(n["updatedAt"]) < cutoff, page_size=20, label="PRs",
     )
+
+
+def fetch_pr(gh: GitHub, owner: str, name: str, number: int) -> dict:
+    """One PR with every nested connection complete, in the same shape as prs.json items."""
+    node = gh.graphql(PR_QUERY, {"owner": owner, "name": name, "number": number})["repository"]["pullRequest"]
+    if node is None:
+        raise ValueError(f"no PR #{number} in {owner}/{name}")
+    _complete_nested(gh, "PullRequest", node, PR_NESTED)
+    return scrub(node)
 
 
 def fetch_issues(gh: GitHub, owner: str, name: str, since: datetime, out: ItemStream) -> None:

@@ -97,6 +97,7 @@ uv run --directory backend python scripts/tasks.py              # Librarian: ope
 uv run --directory backend python scripts/steward.py            # Steward worker: new sandbox issues -> Tasks -> drafts (--poll 60, --no-intake)
 uv run --directory backend python scripts/snapshot.py           # local graphs -> data/snapshots/{lore.rdb,answers.tar.gz,SHA256SUMS} for the v0.1-snapshot release (--no-export)
 uv run --directory backend python scripts/restore.py            # v0.1-snapshot release -> local FalkorDB + answer cache (replaces local graphs; --yes)
+uv run --directory backend python scripts/sync.py --check       # M15: sync PRs merged on GitHub but not in the graph (--pr 16; --prime; --simulate-merge: test DB only)
 scp -i lore.pem deploy/ec2-setup.sh ubuntu@13.237.159.217:~; ssh -i lore.pem ubuntu@13.237.159.217 "bash ec2-setup.sh"   # deploy/update EC2 (README Deploy)
 uv run --directory backend uvicorn lore.api.app:app --port 8000 # API + Steward poll (STEWARD_POLL_SECONDS); OpenAPI docs at http://localhost:8000/docs
 cd frontend; npm install; npm run dev; cd ..                   # UI on http://localhost:3001 (API URL: frontend/.env.local, NEXT_PUBLIC_API_URL)

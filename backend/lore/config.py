@@ -12,7 +12,8 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BACKEND_DIR.parent
 QUERIES_DIR = REPO_ROOT / "queries"
 DATA_DIR = REPO_ROOT / "data"
-RAW_DIR = DATA_DIR / "raw"
+# LORE_RAW_DIR: a test sync works on a copy of the raw cache (scripts/sync.py --simulate-merge).
+RAW_DIR = Path(os.environ.get("LORE_RAW_DIR") or DATA_DIR / "raw")
 CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 LLM_CACHE_DIR = CACHE_DIR / "llm"
@@ -239,6 +240,9 @@ class Settings(BaseSettings):
     # The API polls SANDBOX_REPO for new issues this often and lets Steward draft them (0 = off; the
     # deployed backend uses the webhook instead).
     steward_poll_seconds: int = 60
+    # TEST ONLY (M15 timing test on a test FalkorDB): a pull_request 'merged' webhook is synced as a
+    # simulated merge (the PR's head branch read as if merged). Never set on a real deployment.
+    sync_simulate_merge: bool = False
 
 
 @lru_cache

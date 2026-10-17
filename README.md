@@ -30,7 +30,7 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | 09 | similar_issues | F5 triage: nearest past issues (vector), the PRs that closed them and the modules those PRs touched |
 | 01 | load_indexes, load_doc_chunks, load_doc_chunks_reset | Range, full-text and vector indexes (`EMBEDDING_DIM`, cosine); docs cut into ~800-char overlapping `DocChunk`s, `(DocChunk)-[:PART_OF]->(Doc)` |
 | 21 | embed_*_texts, embed_set_* | Read the text to embed per Decision (statement + rationale + quote), Issue (title + 500 body chars) and DocChunk; write `vecf32` embeddings |
-| 04 | expert_reset, expert_authored, expert_reviewed, expert_score | Derive `EXPERT_IN`: authored commits with a 180-day half-life, reviews at half weight, combined `score`; skips bots and bulk (> 500 file) commits |
+| 04 | expert_reset, expert_authored, expert_reviewed, expert_score | Derive `EXPERT_IN`: authored commits with a 180-day half-life, reviews at half weight, combined `score`; skips bots and bulk (> 500 file) commits; `$modules` limits it to the modules a sync touched |
 | 05 | who_knows | F2: top experts on a module, with the PRs and commits behind each score |
 | 06 | paper_owners, team_owners, module_owners | F3: CODEOWNERS owners with no touch in 12 months vs the real experts; team-owned modules; one module's owners ("no listed owner" when none) |
 | 01 | load_topics, load_decisions, load_decisions_reset, load_affects, load_proposed, load_approved, load_about | Load extracted Decisions with DECIDED_IN, AFFECTS, PROPOSED, APPROVED and ABOUT edges |
@@ -49,7 +49,8 @@ Every Cypher query lives in [`queries/`](queries/) as `NN_name.cypher` and is lo
 | 13 | issues_known, issue_upsert | Librarian intake of new sandbox issues (poll or webhook): Issue + author `Person` (ON CREATE only, no emails), then embedded like loaded issues |
 | 13 | playbook, feedback_add | Procedural memory: the triage `Playbook` and `(Feedback)-[:ADJUSTS]->(Playbook)`; an approved edit adds its rule to the Playbook's steps and bumps its version |
 | 14 | users_list, user_upsert | Username picker: users with question counts; create a user and link `(User)-[:IS]->(Person)` |
-| 93 | data_version | Fingerprint of an org graph's knowledge (counts, latest timestamps, EXPERT_IN / CO_CHANGED totals; memory excluded), keying the Navigator's answer cache |
+| 15 | pr_states, promote_decisions, sources_without_decisions, decisions_of_sources, decision_detail, supersede_candidates, supersede, modules_of_commits | M15 sync: is a merge loaded; proposed -> active in place; what still needs extraction; active decisions on the same module AND topic as a new one; `SUPERSEDES` + `status = 'superseded'` + `valid_to`; the modules to re-derive |
+| 93 | data_version | Fingerprint of an org graph's knowledge (counts, latest timestamps, merged PRs, SUPERSEDES edges, EXPERT_IN / CO_CHANGED totals; memory excluded), keying the Navigator's answer cache |
 | 92 | check_evidence_prs | Eval only (golden q06): which cited PRs contain a person's non-bulk commits on a module |
 
 ## Setup
@@ -75,6 +76,7 @@ uv run --directory backend uvicorn lore.api.app:app --port 8000               # 
 cd frontend; copy .env.example .env.local; npm install; npm run dev           # UI on http://localhost:3001
 uv run --directory backend python scripts/snapshot.py                         # local graphs -> data/snapshots (release assets for deploy)
 uv run --directory backend python scripts/restore.py                          # v0.1-snapshot release -> local FalkorDB (no keys needed)
+uv run --directory backend python scripts/sync.py --check                     # sync PRs merged on GitHub but not yet in the graph (--pr 16, --prime)
 ```
 
 **Without GitHub or LLM keys** (the demo graphs as deployed): start FalkorDB, then load the snapshot from the [`v0.1-snapshot` release](https://github.com/im-Amrith/lore/releases/tag/v0.1-snapshot) instead of fetching, extracting and embedding:
@@ -103,7 +105,7 @@ Asking new questions still needs a free-tier LLM key (`LLM_FAST_API_KEY` or `LLM
 | `GET /risk` | Bus factor per module (single-expert first), bridge people (betweenness), working groups (label propagation) |
 | `GET /triage`, `POST /triage/{task}/approve` | Triage Tasks with their issue, Steward's draft and the facts it was written from; approve first checks `APPROVE_PASSCODE` (403 when wrong, 429 after 5 wrong tries a minute from one IP), then mints the approval token for that issue and exact text, calls `post_triage` (sandbox only; posts for real only with `DRY_RUN=false`) and marks the Task approved. An edited draft is stored as Feedback and adds a rule to the Playbook |
 | `POST /triage/{task}/redraft`, `POST /triage/sync`, `GET /playbook` | Draft a Task again (after the Playbook changed); check the sandbox for new issues now; the Playbook's steps and Feedback |
-| `POST /webhook/github` | Sandbox `issues` events (opened, reopened, edited), verified with `X-Hub-Signature-256` and `GITHUB_WEBHOOK_SECRET`; the issue is loaded, gets a Task and Steward drafts it in the background |
+| `POST /webhook/github` | Sandbox `issues` events (opened, reopened, edited), verified with `X-Hub-Signature-256` and `GITHUB_WEBHOOK_SECRET`; the issue is loaded, gets a Task and Steward drafts it in the background. `pull_request` closed + merged: a sync of that PR (see Sync and supersession) |
 | `GET /memory/{user}` | Past questions per org and what changed since in the nodes their answers cited |
 | `GET /users`, `POST /users` | Username picker (no passwords); a GitHub login links `(User)-[:IS]->(Person)` |
 
@@ -127,6 +129,18 @@ Asking new questions still needs a free-tier LLM key (`LLM_FAST_API_KEY` or `LLM
 - the reviewer (the next person by expertise, else the CODEOWNERS owner)
 
 The LLM pool then writes the comment from those facts, following the Playbook's steps. Links that no tool returned are stripped, and the draft and its facts are stored on the Task. Nothing is posted until a human approves in the triage inbox. If the human edits the draft first, the edit becomes a `Feedback` node that `ADJUSTS` the `Playbook`, and the rule it teaches is added to the Playbook's steps: the human's own words, or one LLM call that generalises the edit. The next draft follows it.
+
+### Sync and supersession
+
+`backend/lore/ingest/sync.py` keeps the sandbox graph current when a PR is merged (docs/PLAN.md "Keeping knowledge current"). The lore-sandbox webhook sends `pull_request` events; a merge (`closed` + `merged`) starts a sync in the background, and the API's 60-second poll also asks GitHub for recently merged PRs the graph still has unmerged, so a missed delivery is caught within a minute. A sync:
+
+1. re-fetches just that PR (one GraphQL query), the commits added since the last fetch (`git fetch` and their logins) and the docs, into the raw cache, then normalises and `MERGE`s the repo (idempotent)
+2. promotes the PR's decisions from `proposed` to `active` in place (same id, so answers and memory that cited the proposal still point at it)
+3. extracts decisions only from changed PRs and docs that have none yet (in the demo: ADR 0003); a source that already has decisions is never re-extracted, since that would replace them and their history
+4. embeds what changed, then for each newly active decision lists the active decisions on the same module and topic, and asks the LLM pool which ones it replaces; those get `(new)-[:SUPERSEDES {at, reason}]->(old)`, `status = 'superseded'` and `valid_to` = the merge
+5. re-derives `EXPERT_IN` and `CO_CHANGED` only for the modules the new commits touched
+
+Query 93 counts merged PRs and `SUPERSEDES` edges, so the data version changes and the Navigator's answer cache can't serve the pre-merge answer; its key also includes a hash of `queries/`. The demo merge (PR #16, in-process LRU) was tested on a copy of the sandbox graph in a separate FalkorDB, with `scripts/sync.py --simulate-merge` (the PR read from its head branch as if merged; nothing merged on GitHub): the PR #11 and ADR 0001 decisions both end up superseded by the PR #16 and ADR 0003 decisions, and "What changed since I last asked?" lists it.
 
 ## Deploy
 
@@ -202,10 +216,10 @@ vercel deploy --prod --build-env NEXT_PUBLIC_API_URL=https://13-237-159-217.ssli
 
 ### Webhook
 
-The lore-sandbox webhook sends `issues` events to `https://13-237-159-217.sslip.io/webhook/github` (content type JSON, secret = `GITHUB_WEBHOOK_SECRET`); the backend checks `X-Hub-Signature-256`. Created with:
+The lore-sandbox webhook sends `issues` and `pull_request` events to `https://13-237-159-217.sslip.io/webhook/github` (content type JSON, secret = `GITHUB_WEBHOOK_SECRET`); the backend checks `X-Hub-Signature-256`. Created with:
 
 ```powershell
-gh api repos/im-Amrith/lore-sandbox/hooks -f name=web -F active=true -f "events[]=issues" -f config[url]=https://13-237-159-217.sslip.io/webhook/github -f config[content_type]=json -f config[secret]=<GITHUB_WEBHOOK_SECRET>
+gh api repos/im-Amrith/lore-sandbox/hooks -f name=web -F active=true -f "events[]=issues" -f "events[]=pull_request" -f config[url]=https://13-237-159-217.sslip.io/webhook/github -f config[content_type]=json -f config[secret]=<GITHUB_WEBHOOK_SECRET>
 ```
 
 The 60-second poll stays on as a fallback, so a missed delivery is still drafted within a minute.
@@ -226,6 +240,7 @@ This project is built with Claude Code (Anthropic) as a coding assistant. The pl
 - M9 Navigator + eval (`agents/navigator.py`, `llm/agent.py`, `scripts/ask.py`, `scripts/eval.py`, eval fields for the sandbox and Bolt entries in `golden_set.yaml`): written with Claude Code. The Navigator itself runs on Gemini `gemini-3.8-flash` with Groq `gpt-oss-120b` as fallback; the eval scores its answers deterministically (no LLM judge).
 - M11 Ask screen (`frontend/`, `POST /ask/stream`, node labels and pending flags in Navigator answers): written with Claude Code.
 - M10 API (`backend/lore/api/`, queries 13 and 14, `ingest/tasks.py`, `scripts/tasks.py`, API tests): written with Claude Code.
+- M15 Sync + supersession (`ingest/sync.py`, `scripts/sync.py`, queries 15 and the `$modules` / `$missing` scoping of 04, 10 and 21, query 93's merge counts, the pull_request webhook and poll check, the answer-rule for superseded decisions, `tests/test_sync.py`): written with Claude Code, tested on a copy of the sandbox graph in a separate test FalkorDB with a simulated merge. The supersession judgement runs on the free-tier agent pool; which decisions are compared is decided by the graph (same module and topic).
 - M14 Deploy (`Dockerfile`, `deploy/docker-compose.yml`, `deploy/Caddyfile`, `deploy/ec2-setup.sh`, `scripts/snapshot.py`, `scripts/restore.py`, the deploy docs): written with Claude Code, including the free-host comparison that led to EC2.
 - M13 Steward (`agents/steward.py`, `ingest/live.py`, the work-board, intake and Playbook queries in 13, the work-board MCP tools, webhook, poll loop, approve with Feedback, real posting behind `DRY_RUN`, `scripts/steward.py`, the triage inbox screen, `tests/test_steward.py`): written with Claude Code. The related-issue distance (0.30) and reviewer threshold (0.1) were checked against the two demo issues on a copy of the sandbox graph. The drafts and the rules learned from edits are written by the free-tier agent pool; the owner, reviewer and related issues are picked by code from tool results.
 - M6 embeddings (`ingest/embed.py`, `graph/search.py`, queries 02, 09 and 21, `scripts/embed.py`, `scripts/find.py`): written with Claude Code, including the fusion tuning against q01-q04 and s01 (measured ranks are in `queries/02_entry_decisions.cypher`). Embeddings run locally with fastembed (`BAAI/bge-small-en-v1.5`).

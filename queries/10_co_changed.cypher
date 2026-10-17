@@ -11,6 +11,7 @@ WHERE size(mods) >= 2 AND size(mods) <= $max_modules
 UNWIND mods AS a
 UNWIND mods AS b
 WITH c, a, b WHERE id(a) < id(b)
+  AND ($modules IS NULL OR a.id IN $modules OR b.id IN $modules)  // pairs with a touched module
 WITH a, b, count(c) AS n, max(c.at) AS last
 WHERE n >= $min_count
 MERGE (a)-[r:CO_CHANGED]->(b)

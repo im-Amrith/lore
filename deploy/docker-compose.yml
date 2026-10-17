@@ -32,6 +32,7 @@ services:
       FALKORDB_PORT: "6379"
     volumes:
       - ../state/cache:/app/data/cache  # answer cache (seeded from the release), LLM cache, endpoint state
+      - ../state/raw:/app/data/raw      # the sandbox's raw GitHub cache, which a sync (M15) updates
     depends_on:
       falkordb:
         condition: service_healthy

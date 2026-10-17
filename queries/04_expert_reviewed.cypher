@@ -5,7 +5,7 @@
 // Self-reviews (authors replying in review threads) are skipped, as are bots and bulk commits.
 MATCH (p:Person)-[r:REVIEWED]->(pr:PullRequest)<-[:PART_OF]-(c:Commit)-[:TOUCHES]->(m:Module)
 WHERE NOT coalesce(p.is_bot, false) AND NOT coalesce(c.bulk, false) AND r.at <= $now
-  AND NOT (p)-[:AUTHORED]->(pr)
+  AND NOT (p)-[:AUTHORED]->(pr) AND ($modules IS NULL OR m.id IN $modules)
 WITH p, pr, m, max(r.at) AS at
 WITH p, m,
      sum(0.5 * exp(-0.693 * ($now - at) / 15552000.0)) AS s,
