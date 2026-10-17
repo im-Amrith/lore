@@ -246,8 +246,11 @@ sandbox:
   - id: s03
     type: risk
     question: "Which modules depend on one person?"
-    expected: "storage/: every commit is by Marta Silva (the listed owner, <your-login>, has never touched it)."
+    expected: >
+      Every sandbox module has one author, so all seven are single-expert. First come the two where that
+      expert is not the CODEOWNERS owner: storage/ (every commit by Marta Silva; listed owner im-Amrith) and
+      analytics/ (Priya Raman; listed owner im-Angel2305).
     must_cite: []
-    # Passes if storage and Marta Silva are named (Oct 17: every sandbox module has one author,
-    # so an answer listing all of them is correct).
-    key_facts: ["storage", "Marta Silva"]
+    # Oct 17: every sandbox module really has one author, so an answer listing all of them is correct.
+    # Query 7 sorts single-expert modules whose expert isn't the listed owner first (storage, analytics).
+    key_facts: ["storage", "Marta Silva", "analytics", "Priya Raman"]

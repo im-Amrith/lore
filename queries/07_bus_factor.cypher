@@ -10,9 +10,13 @@
 // Values live in config.py (BUS_FACTOR_*).
 // $repo (repo name, or '' for all) limits the list to one repo's modules (Module.repo).
 // Modules whose total authored score is 0 (only bots or bulk commits) are left out.
-// Order: single points of failure first (1, 2, ...), then dormant modules (bus_factor 0:
-// nobody has authored a real share in the window) at the end, so tiny old modules don't
-// crowd out the risk list.
+// Owners: the module's CODEOWNERS owners (people, and the known members of owning teams).
+// owner_not_expert = an owner is listed but none of the experts is one of them: the knowledge sits
+// with someone CODEOWNERS doesn't name (sandbox: storage is Marta's, listed owner im-Amrith;
+// analytics is Priya's, listed owner im-Angel2305). A module with no listed owner is not flagged.
+// Order: single points of failure first (1, 2, ...), and within the same bus factor the modules
+// whose experts aren't the listed owner first; then dormant modules (bus_factor 0: nobody has
+// authored a real share in the window) at the end, so tiny old modules don't crowd out the list.
 MATCH (m:Module)
 WHERE $repo = '' OR m.repo = $repo
 OPTIONAL MATCH (:Person)-[x:EXPERT_IN]->(m)
@@ -25,6 +29,14 @@ WITH m, total, p, e ORDER BY e.authored DESC
 WITH m, total,
      collect(coalesce(p.login, p.name)) AS experts, collect(p.id) AS expert_ids,
      collect(round(100.0 * e.authored / total)) AS shares
+OPTIONAL MATCH (o)-[:OWNS]->(m)
+OPTIONAL MATCH (member:Person)-[:MEMBER_OF]->(o)
+WITH m, total, experts, expert_ids, shares,
+     collect(DISTINCT coalesce(o.login, o.name)) AS owners,
+     collect(DISTINCT o.id) + collect(DISTINCT member.id) AS owner_people
+WITH m, total, experts, expert_ids, shares, owners,
+     size(owners) > 0 AND size(experts) > 0 AND none(pid IN expert_ids WHERE pid IN owner_people) AS owner_not_expert
 RETURN m.id AS module_id, m.path AS module, size(experts) AS bus_factor, experts, expert_ids,
-       shares AS share_pct, total AS total_score
-ORDER BY CASE WHEN bus_factor = 0 THEN 1 ELSE 0 END, bus_factor ASC, total_score DESC
+       shares AS share_pct, total AS total_score, owners, owner_not_expert
+ORDER BY CASE WHEN bus_factor = 0 THEN 1 ELSE 0 END, bus_factor ASC,
+         CASE WHEN owner_not_expert THEN 0 ELSE 1 END, total_score DESC

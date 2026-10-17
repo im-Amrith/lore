@@ -31,6 +31,7 @@ reads the graph carries the Cypher that ran, for the UI's "show query" toggle.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import math
@@ -130,6 +131,8 @@ app = FastAPI(
 app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 limiter = RateLimiter(settings.ask_per_minute, settings.ask_per_day)
+# Wrong approve passcodes per client IP: 5 a minute, 20 a day, then 429 (no guessing it).
+passcode_failures = RateLimiter(5, 20)
 
 
 @app.get("/", include_in_schema=False)
@@ -374,6 +377,7 @@ def triage(status: str = Query("", description="open, claimed, drafted, approved
 
 class ApproveIn(BaseModel):
     user: str = Field(examples=["amrith"])
+    passcode: str = Field("", max_length=200, description="APPROVE_PASSCODE: only people who know it can approve")
     draft: str | None = Field(None, max_length=4000,
                               description="the final comment text (edited or not); default: the Task's draft")
     rule: str | None = Field(None, max_length=300,
@@ -383,10 +387,12 @@ class ApproveIn(BaseModel):
 
 @app.post("/triage/{task:path}/approve", tags=["triage"],
           summary="Approve a draft: post it to the sandbox issue (unless DRY_RUN) and mark the Task approved")
-async def approve(task: str, body: ApproveIn) -> dict[str, Any]:
+async def approve(task: str, body: ApproveIn, request: Request) -> dict[str, Any]:
     """task: the issue number (9), the issue id or the full task id (URL-encode '#' as %23).
-    The approval token is minted here, by the human's click, for this issue and this exact text;
-    post_triage refuses anything else and any repo but SANDBOX_REPO."""
+    The passcode (APPROVE_PASSCODE) is checked first; only then is the approval token minted, by the
+    human's click, for this issue and this exact text. post_triage refuses anything else and any repo
+    but SANDBOX_REPO."""
+    _check_passcode(body.passcode, request)
     org, user, task_id = _sandbox_org(), _user(body.user), _task_id(task)
     rows = [r for r in ro_query(get_graph(org), "triage_inbox", {"status": "", "limit": 1000}) if r["task_id"] == task_id]
     if not rows:
@@ -417,6 +423,18 @@ async def approve(task: str, body: ApproveIn) -> dict[str, Any]:
         feedback, fb_cypher = await _store_feedback(org, task_id, user, before, draft, (body.rule or "").strip())
         cypher.append(fb_cypher)
     return {"task": done[0], "post": posted, "feedback": feedback, "cypher": cypher}
+
+
+def _check_passcode(passcode: str, request: Request) -> None:
+    """403 for a wrong passcode, 429 after too many from one IP, 503 when none is configured."""
+    if not settings.approve_passcode:
+        raise HTTPException(503, "APPROVE_PASSCODE is not set on the server, so approvals are refused")
+    ip = request.client.host if request.client else "unknown"  # the real client: uvicorn trusts Caddy's X-Forwarded-For
+    if wait := passcode_failures.blocked(ip):
+        raise HTTPException(429, f"too many wrong passcodes; retry in {wait:.0f}s", headers={"Retry-After": str(int(wait) + 1)})
+    if not hmac.compare_digest(passcode.encode("utf-8"), settings.approve_passcode.encode("utf-8")):
+        passcode_failures.check(ip)
+        raise HTTPException(403, "wrong approve passcode")
 
 
 def _differs(a: str, b: str) -> bool:

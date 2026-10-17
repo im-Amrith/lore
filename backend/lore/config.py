@@ -233,6 +233,9 @@ class Settings(BaseSettings):
     # M13: post_triage only prints the comment while this is true; set DRY_RUN=false to post for real
     # (still only to SANDBOX_REPO, still only with an approval token).
     dry_run: bool = True
+    # Approve (the only route that leads to a GitHub write) also needs this passcode, typed in the
+    # triage inbox; the API checks it before minting the approval token. Empty = every approval refused.
+    approve_passcode: str = ""
     # The API polls SANDBOX_REPO for new issues this often and lets Steward draft them (0 = off; the
     # deployed backend uses the webhook instead).
     steward_poll_seconds: int = 60

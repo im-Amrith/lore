@@ -101,7 +101,7 @@ Asking new questions still needs a free-tier LLM key (`LLM_FAST_API_KEY` or `LLM
 | `POST /ask` `{org, user, question}` | The Navigator's answer: cited sentences, citations with links, the subgraph and the walked path, every Cypher query that ran, the tools and LLM endpoints used. At most `ASK_PER_MINUTE` (5) and `ASK_PER_DAY` (100) per user; 429 with `Retry-After` past that, 503 when every free-tier LLM endpoint is out |
 | `GET /module/{id}` | CODEOWNERS owners vs active experts (paper owners, mismatch), experts with evidence PRs, decisions on the module split into current / pending proposals / history, co-changed modules |
 | `GET /risk` | Bus factor per module (single-expert first), bridge people (betweenness), working groups (label propagation) |
-| `GET /triage`, `POST /triage/{task}/approve` | Triage Tasks with their issue, Steward's draft and the facts it was written from; approve mints the approval token for that issue and exact text, calls `post_triage` (sandbox only; posts for real only with `DRY_RUN=false`) and marks the Task approved. An edited draft is stored as Feedback and adds a rule to the Playbook |
+| `GET /triage`, `POST /triage/{task}/approve` | Triage Tasks with their issue, Steward's draft and the facts it was written from; approve first checks `APPROVE_PASSCODE` (403 when wrong, 429 after 5 wrong tries a minute from one IP), then mints the approval token for that issue and exact text, calls `post_triage` (sandbox only; posts for real only with `DRY_RUN=false`) and marks the Task approved. An edited draft is stored as Feedback and adds a rule to the Playbook |
 | `POST /triage/{task}/redraft`, `POST /triage/sync`, `GET /playbook` | Draft a Task again (after the Playbook changed); check the sandbox for new issues now; the Playbook's steps and Feedback |
 | `POST /webhook/github` | Sandbox `issues` events (opened, reopened, edited), verified with `X-Hub-Signature-256` and `GITHUB_WEBHOOK_SECRET`; the issue is loaded, gets a Task and Steward drafts it in the background |
 | `GET /memory/{user}` | Past questions per org and what changed since in the nodes their answers cited |
@@ -168,6 +168,7 @@ Why not a free host: the backend holds the embedding model and lore-mcp in proce
    | `TRIAGE_APPROVAL_SECRET` | any long random string (`python -c "import secrets; print(secrets.token_hex(32))"`) |
    | `LLM_FAST_BASE_URL`, `LLM_FAST_API_KEY`, `LLM_FAST_MODEL` | Gemini OpenAI-compatible endpoint, free-tier key |
    | `LLM_SMART_BASE_URL`, `LLM_SMART_API_KEY`, `LLM_SMART_MODEL` | Groq, free-tier key |
+   | `APPROVE_PASSCODE` | typed in the triage inbox to approve; checked before the approval token is made (5 wrong tries a minute per IP) |
    | `DRY_RUN` | `true` until the demo; `false` posts approved triage comments to lore-sandbox |
    | `STEWARD_POLL_SECONDS` | `60` (the poll is the webhook's fallback) |
    | optional: `EMBEDDING_MODEL`, `EMBEDDING_DIM`, `LLM_DAILY_CALL_CAP`, `ASK_PER_MINUTE`, `ASK_PER_DAY` | defaults as in `.env.example` |

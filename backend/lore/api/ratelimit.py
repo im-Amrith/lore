@@ -18,6 +18,17 @@ class RateLimiter:
         self.hits: dict[str, deque[float]] = defaultdict(deque)
         self.lock = threading.Lock()
 
+    def blocked(self, key: str, now: float | None = None) -> float:
+        """Seconds until key is under every limit again (0 = not blocked); records nothing."""
+        now = time.time() if now is None else now
+        with self.lock:
+            hits = self.hits[key]
+            for span, limit in self.windows:
+                recent = [t for t in hits if t > now - span]
+                if len(recent) >= limit:
+                    return round(recent[0] + span - now, 1)
+            return 0.0
+
     def check(self, key: str, now: float | None = None) -> float:
         """Record a hit and return 0, or return the seconds until one is allowed (nothing recorded)."""
         now = time.time() if now is None else now

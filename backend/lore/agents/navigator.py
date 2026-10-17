@@ -39,7 +39,7 @@ import anyio
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
-from lore.config import ANSWER_CACHE_DIR, BACKEND_DIR, NAVIGATOR_MAX_TOOL_CALLS
+from lore.config import ANSWER_CACHE_DIR, BACKEND_DIR, NAVIGATOR_MAX_TOOL_CALLS, QUERIES_DIR
 from lore.llm.agent import agent_chat, flatten
 
 # Tools the LLM may choose. remember (step 7) is called by code; post_triage belongs to Steward.
@@ -341,10 +341,14 @@ def normalize_question(question: str) -> str:
     return re.sub(r"\s+", " ", question.strip().lower()).rstrip(" ?.!")
 
 
-# Any change to what the LLM is told or shown makes cached answers stale.
+# Any change to what the LLM is told or shown makes cached answers stale, and so does any change to
+# a query (a new ordering or field changes what the tools return for the same graph).
+QUERIES_VERSION = hashlib.sha256(b"".join(
+    p.name.encode("utf-8") + p.read_bytes().replace(b"\r\n", b"\n") for p in sorted(QUERIES_DIR.glob("*.cypher")))
+).hexdigest()[:12]
 PROMPT_VERSION = hashlib.sha256(json.dumps(
     [SYSTEM, ANSWER_RULES, COMPOSE, ANSWER_SCHEMA, sorted(DROP_KEYS), RENAME, LIST_CAPS, NESTED_LIST_CAPS,
-     STR_CAPS, MAX_STR, NAVIGATOR_MAX_TOOL_CALLS], sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
+     STR_CAPS, MAX_STR, NAVIGATOR_MAX_TOOL_CALLS, QUERIES_VERSION], sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
 
 
 def _cache_path(question: str, org: str, data_version: str):

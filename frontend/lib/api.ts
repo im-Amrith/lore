@@ -236,5 +236,5 @@ export const syncTriage = () => post("/triage/sync").then((r) => json<unknown>(r
 export const redraftTask = (issueNumber: number) =>
   post(`/triage/${taskPath(issueNumber)}/redraft`).then((r) => json<unknown>(r));
 
-export const approveTask = (issueNumber: number, body: { user: string; draft: string; rule?: string }) =>
+export const approveTask = (issueNumber: number, body: { user: string; draft: string; rule?: string; passcode: string }) =>
   post(`/triage/${taskPath(issueNumber)}/approve`, body).then((r) => json<ApproveResult>(r));

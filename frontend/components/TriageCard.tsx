@@ -20,6 +20,15 @@ function ago(epoch: number | null): string {
   return `${Math.floor(s / 86400)} d ago`;
 }
 
+// The approve passcode is kept for this browser tab only (sessionStorage), never in localStorage.
+function readPasscode(): string {
+  try {
+    return sessionStorage.getItem("lore.passcode") ?? "";
+  } catch {
+    return "";
+  }
+}
+
 function Who({ label, p }: { label: string; p: TriagePerson }) {
   const href = p.login ? `https://github.com/${p.login}` : undefined;
   return (
@@ -54,6 +63,7 @@ export function TriageCard({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApproveResult | null>(null);
   const [showFacts, setShowFacts] = useState(false);
+  const [passcode, setPasscode] = useState(readPasscode);
 
   const f = item.facts;
   const status = STATUS[item.status] ?? STATUS.open;
@@ -66,7 +76,17 @@ export function TriageCard({
     setBusy("approve");
     setError(null);
     try {
-      const r = await approveTask(item.number, { user, draft: editing ? text : item.draft ?? "", rule: rule.trim() || undefined });
+      try {
+        sessionStorage.setItem("lore.passcode", passcode);
+      } catch {
+        /* not remembered */
+      }
+      const r = await approveTask(item.number, {
+        user,
+        draft: editing ? text : item.draft ?? "",
+        rule: rule.trim() || undefined,
+        passcode,
+      });
       setResult(r);
       setEditing(false);
       onChanged();
@@ -226,9 +246,18 @@ export function TriageCard({
 
         {item.status === "drafted" && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              placeholder="Approve passcode"
+              aria-label="Approve passcode"
+              autoComplete="off"
+              className="w-40 rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-accent"
+            />
             <button
               onClick={approve}
-              disabled={!user || busy !== null || !(editing ? text : item.draft)?.trim()}
+              disabled={!user || !passcode || busy !== null || !(editing ? text : item.draft)?.trim()}
               className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-ink disabled:bg-line-strong"
             >
               {busy === "approve" ? "Approving…" : edited ? "Approve edit and post" : "Approve and post"}

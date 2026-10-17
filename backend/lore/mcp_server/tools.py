@@ -452,6 +452,8 @@ def knowledge_risk(org: str, repo: str | None = None) -> dict[str, Any]:
         "repo": repo_name or None,
         "modules": modules,
         "single_expert_modules": [m["module"] for m in modules if m["single_expert"]],
+        # Single expert who isn't the CODEOWNERS owner: the knowledge sits where the listing doesn't point.
+        "single_expert_not_owner": [m["module"] for m in modules if m["single_expert"] and m["owner_not_expert"]],
         "dormant_modules": len(rows) - len(active),
         "bridge_people": bridges,
         "working_groups": groups,
