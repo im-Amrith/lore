@@ -28,16 +28,22 @@ def _results_of(results: list[tuple[str, dict[str, Any]]], tool: str) -> list[di
 
 
 def why_lead(results: list[tuple[str, dict[str, Any]]], known: set[str]) -> dict[str, Any] | None:
-    """The opening sentence of a why answer: the first active decision trace_decision returned."""
-    for r in _results_of(results, "trace_decision"):
-        for d in r.get("decisions") or []:
-            if d.get("status") != "active" or not d.get("statement") or d.get("id") not in known:
-                continue
-            cites = [d["id"]] + [s["id"] for s in d.get("sources") or [] if s.get("id") in known]
-            cites += [i["id"] for i in d.get("issues") or [] if "CLOSES" in (i.get("rels") or []) and i.get("id") in known]
-            text = d["statement"].strip()
-            return {"text": text if text.endswith((".", "!", "?")) else text + ".", "cites": list(dict.fromkeys(cites))}
-    return None
+    """The opening sentence of a why answer: an active decision trace_decision returned, preferring one
+    decided in a PR. The same choice is often recorded twice (a PR and its ADR, two decision nodes);
+    the other traced active decisions on the same module are cited too, with their sources."""
+    active = [d for r in _results_of(results, "trace_decision") for d in r.get("decisions") or []
+              if d.get("status") == "active" and d.get("statement") and d.get("id") in known]
+    if not active:
+        return None
+    lead = next((d for d in active if any(str(s.get("id", "")).startswith("pr:") for s in d.get("sources") or [])),
+                active[0])
+    same = [d for d in active if d is not lead and set(d.get("modules") or []) & set(lead.get("modules") or [])]
+    cites: list[str] = []
+    for d in [lead, *same]:
+        cites += [d["id"]] + [s["id"] for s in d.get("sources") or [] if s.get("id") in known]
+        cites += [i["id"] for i in d.get("issues") or [] if "CLOSES" in (i.get("rels") or []) and i.get("id") in known]
+    text = lead["statement"].strip()
+    return {"text": text if text.endswith((".", "!", "?")) else text + ".", "cites": list(dict.fromkeys(cites))}
 
 
 def add_lead(sentences: list[dict[str, Any]], lead: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -66,7 +72,7 @@ def module_first(sentences: list[dict[str, Any]], module: dict[str, str] | None,
         return sentences
     first = dict(sentences[0])
     if not _mentions_path(first["text"], module["path"]):
-        first["text"] = f"On {module['path']}: {first['text'][:1].lower()}{first['text'][1:]}"
+        first["text"] = f"On {module['path']}: {first['text']}"  # case kept: it may start with a name
     if module["id"] in known and module["id"] not in first["cites"]:
         first["cites"] = first["cites"] + [module["id"]]
     return [first] + sentences[1:]

@@ -99,7 +99,7 @@ def test_existing_cites_are_kept_and_not_duplicated():
 def test_module_first_prepends_the_path_and_cites_it():
     mod = ground.subject_module([EXPERTS])
     out = ground.module_first([s("Ask AviAvni.", "person:AviAvni"), s("More.")], mod, KNOWN)
-    assert out[0]["text"] == "On graph/src/parser: ask AviAvni."
+    assert out[0]["text"] == "On graph/src/parser: Ask AviAvni."
     assert out[0]["cites"] == ["person:AviAvni", "module:FalkorDB:graph/src/parser"]
 
 
@@ -114,3 +114,17 @@ def test_module_first_does_not_match_a_longer_path():
     mod = {"id": "module:FalkorDB:graph/src", "path": "graph/src"}
     out = ground.module_first([s("graph/src/parser is Avi's.")], mod, KNOWN | {"module:FalkorDB:graph/src"})
     assert out[0]["text"].startswith("On graph/src: ")
+
+
+def test_why_lead_prefers_the_pr_decision_and_cites_the_same_choice_recorded_elsewhere():
+    adr = {"id": "decision:adr", "status": "active", "statement": "Move the link cache to Redis",
+           "modules": ["module:lore-sandbox:cache"], "sources": [{"id": "doc:x:docs/adr/0001.md"}], "issues": []}
+    pr = {"id": "decision:pr", "status": "active", "statement": "Use a shared Redis link cache",
+          "modules": ["module:lore-sandbox:cache"], "sources": [{"id": "pr:x#11"}],
+          "issues": [{"id": "issue:x#1", "rels": ["CLOSES", "REFERENCES"]}]}
+    other = {"id": "decision:other", "status": "active", "statement": "Unrelated", "modules": ["module:lore-sandbox:api"],
+             "sources": [{"id": "pr:x#3"}], "issues": []}
+    known = {"decision:adr", "decision:pr", "decision:other", "doc:x:docs/adr/0001.md", "pr:x#11", "issue:x#1", "pr:x#3"}
+    lead = ground.why_lead([("trace_decision", {"decisions": [adr]}), ("trace_decision", {"decisions": [pr, other]})], known)
+    assert lead["text"] == "Use a shared Redis link cache."
+    assert lead["cites"] == ["decision:pr", "pr:x#11", "issue:x#1", "decision:adr", "doc:x:docs/adr/0001.md"]
