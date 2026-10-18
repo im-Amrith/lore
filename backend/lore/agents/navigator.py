@@ -512,6 +512,20 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
             if reply["tool_calls"]:
                 await run_calls(reply)
 
+    # Step 4b: a why answer always traces the top-ranked entry decision (query 2), even when the LLM
+    # picked others, so the lead sentence (ground.why_lead) can rest on it.
+    top = next(iter(ev.first.get("decisions") or []), None)
+    traced = {c["args"].get("node_id") for c in ev.calls if c["tool"] == "trace_decision"}
+    if intent == "why" and top and top.get("id") not in traced and used < NAVIGATOR_MAX_TOOL_CALLS:
+        targs = {"node_id": top["id"]}
+        used += 1
+        log(f"  [tool {used}] trace_decision {targs} (top entry decision)")
+        emit({"type": "tool", "n": used, "tool": "trace_decision", "args": targs})
+        result = await _call(client, ev, "trace_decision", {**targs, "org": org, "question": question})
+        messages += [{"role": "assistant", "content": "", "tool_calls": [{"id": "call_top", "type": "function",
+                      "function": {"name": "trace_decision", "arguments": json.dumps(targs)}}]},
+                     {"role": "tool", "tool_call_id": "call_top", "content": json.dumps(result, default=str)}]
+
     # Step 5: compose from the tool results (no tools offered), then keep only cites a tool returned.
     compose = [{"role": "system", "content": COMPOSE}, *flatten(messages[1:])]
     reply = await chat(compose, json_schema=ANSWER_SCHEMA, step="write answer", use_cache=use_cache)
