@@ -28,7 +28,7 @@ from lore.graph.queries import load_query  # noqa: E402
 
 
 def deleted(graph, name: str, params: dict) -> int:
-    return graph.query(load_query(name), params).nodes_deleted
+    return int(graph.query(load_query(name), params).nodes_deleted)
 
 
 def reset(graphs: dict[str, object], sandbox_org: str, repo: str, a: argparse.Namespace, apply: bool) -> None:
