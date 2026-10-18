@@ -35,7 +35,7 @@ from typing import Any, Callable
 
 import httpx
 
-from lore.config import DECISION_MIN_CONFIDENCE, FETCH_SINCE_DAYS, CO_CHANGE_MAX_MODULES, CO_CHANGE_MIN_COUNT, \
+from lore.config import SYNC_EXTRA_POOL, DECISION_MIN_CONFIDENCE, FETCH_SINCE_DAYS, CO_CHANGE_MAX_MODULES, CO_CHANGE_MIN_COUNT, \
     RAW_DIR, get_settings
 from lore.graph.client import get_graph, query, ro_query
 from lore.ingest.embed import embed_graph
@@ -56,6 +56,7 @@ from lore.ingest.github_fetch import (
 from lore.ingest.load import load_rows
 from lore.ingest.normalize import commit_id, doc_id, normalize_repos, pr_id
 from lore.llm.agent import agent_chat
+from lore.llm.chat import POOLED
 from lore.safety import check_sandbox_repo
 
 GITHUB_API = "https://api.github.com"
@@ -171,7 +172,7 @@ def judge(repo: str, new: dict[str, Any], olds: list[dict[str, Any]]) -> list[di
     msgs = [{"role": "system", "content": JUDGE.format(repo=repo)},
             {"role": "user", "content": json.dumps({"new": _brief(new), "older": [_brief(o) for o in olds]},
                                                    indent=1, default=str)}]
-    reply = agent_chat(msgs, json_schema=JUDGE_SCHEMA)
+    reply = agent_chat(msgs, json_schema=JUDGE_SCHEMA, extra_pool=SYNC_EXTRA_POOL)
     content = reply["content"]
     try:
         out = json.loads(content[content.find("{"):content.rfind("}") + 1]).get("replaces", [])
@@ -211,7 +212,11 @@ def sync_merged(repo: str, numbers: list[int], simulate: bool = False,
     cands = [c for c in load_candidates(graph, repo, all_prs=True) if c.id in fresh]
     extracted: list[dict[str, Any]] = []
     if cands:
-        results = extract(cands, repo, owner, log=log)
+        token = POOLED.set(SYNC_EXTRA_POOL)  # extraction through the pool: a merge can't stall on one endpoint
+        try:
+            results = extract(cands, repo, owner, log=log)
+        finally:
+            POOLED.reset(token)
         load_extractions(graph, results, owner, log=lambda m: None)
         extracted = ro_query(graph, "decisions_of_sources", {"ids": [c.id for c in cands]})
     log(f"  extracted {len(extracted)} decision(s) from {[c.label for c in cands]}")

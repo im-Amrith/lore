@@ -56,12 +56,12 @@ class EmptyReply(RuntimeError):
 
 # ---------------------------------------------------------------- the pool and its state
 
-def pool() -> list[dict[str, Any]]:
-    """Configured endpoints, in order; entries whose key env var is empty are left out."""
+def pool(extra: tuple | list = ()) -> list[dict[str, Any]]:
+    """Configured endpoints, in order (then `extra`); entries whose key env var is empty are left out."""
     s = get_settings()
     base = {"gemini": s.llm_fast_base_url, "groq": s.llm_smart_base_url}
     out = []
-    for provider, key_var, model, schema in AGENT_LLM_POOL:
+    for provider, key_var, model, schema in [*AGENT_LLM_POOL, *extra]:
         key = getattr(s, key_var.lower(), "")
         if key:
             out.append({"label": f"{provider}:{model}", "provider": provider, "base_url": base[provider],
@@ -176,8 +176,8 @@ def _kwargs(ep: dict[str, Any], messages: list[dict[str, Any]], tools: list | No
 
 def agent_chat(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
                tool_choice: str | dict = "auto", json_schema: dict | None = None,
-               use_cache: bool = True) -> dict[str, Any]:
-    endpoints = pool()
+               use_cache: bool = True, extra_pool: tuple | list = ()) -> dict[str, Any]:
+    endpoints = pool(extra_pool) if extra_pool else pool()
     req = json.dumps({"tools": tools, "tool_choice": tool_choice, "schema": json_schema}, sort_keys=True)
     keys = {ep["label"]: cache_key(ep["model"], req, messages) for ep in endpoints}
     if use_cache:

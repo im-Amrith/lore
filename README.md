@@ -239,7 +239,9 @@ Every Cypher query is a file in [`queries/`](queries/), loaded by name (no Cyphe
 
 [`docs/golden_set.yaml`](docs/golden_set.yaml) holds 10 hand-checked questions on FalkorDB (q01-q10), plus three sandbox checks (s01-s03) and a not-found test (n01). `scripts/eval.py` runs each through the Navigator and scores it deterministically, with no LLM judge: every `must_cite` URL cited, every key fact present, every shown sentence cited.
 
-**Final run on the deployed server, 2026-10-18 06:53 UTC, with no answer or LLM cache (`--all --no-cache`): golden q01-q10 10 of 10 pass; all checks 14 of 14.** Full answers: [docs/eval_results.md](docs/eval_results.md). **The golden questions, expected citations and key facts were not changed** between the two runs below; only the answer pipeline was.
+**Final run on the deployed server, 2026-10-18 06:53 UTC, with no answer or LLM cache (`--all --no-cache`): golden q01-q10 10 of 10 pass; all checks 14 of 14.** Full answers: [docs/eval_results.md](docs/eval_results.md).
+
+First full run 7/10; deterministic grounding (verbatim decision statement, citation pass, owner/path rules) brought it to 10/10 with the golden set and scorer unchanged. **The golden questions, expected citations and key facts were not changed** between the two runs below; only the answer pipeline was.
 
 | id | type | question | first run (06:04 UTC) | final run (06:53 UTC) |
 | --- | --- | --- | --- | --- |

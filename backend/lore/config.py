@@ -138,6 +138,9 @@ AGENT_LLM_POOL: list[tuple[str, str, str, bool]] = [
     ("groq", "LLM_SMART_API_KEY", "openai/gpt-oss-20b", True),
     ("gemini", "LLM_FAST_API_KEY", "gemini-3.5-flash-lite", True),
 ]
+# M15 sync only (ADR extraction and the supersession judge are small calls): a last resort after the
+# agent pool, never used for user answers. Groq doesn't take a strict JSON schema here: JSON mode.
+SYNC_EXTRA_POOL: list[tuple[str, str, str, bool]] = [("groq", "LLM_SMART_API_KEY", "llama-3.1-8b-instant", False)]
 AGENT_LLM_STATE = LLM_CACHE_DIR / "endpoint_state.json"  # cooldowns and exhausted endpoints, shared by runs
 AGENT_COOLDOWN_DEFAULT = 60  # seconds, when a per-minute 429 gives no retry-after
 AGENT_TIMEOUT = 40  # seconds per agent LLM request: a stalled endpoint falls through to the next one

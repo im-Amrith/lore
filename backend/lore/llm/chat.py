@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import random
 import time
+from contextvars import ContextVar
 from functools import lru_cache
 from typing import Any
 
@@ -20,6 +21,10 @@ import openai
 
 from lore.config import LLM_MAX_RETRIES, LLM_MIN_INTERVAL, get_settings
 from lore.llm.cache import cache_get, cache_key, cache_put, count_call
+
+# While set (the M15 sync sets it), chat_json goes through the agent pool plus these extra endpoints, so
+# one endpoint out of quota can't stall a merge: no long retries, the next endpoint answers instead.
+POOLED: ContextVar[list | None] = ContextVar("lore_llm_pooled", default=None)
 
 _last_call: dict[str, float] = {}
 
@@ -76,6 +81,8 @@ def chat_json(role: str, system: str, user: str, schema: dict, name: str,
     key = cache_key(model, prompt, user)
     if use_cache and (hit := cache_get("chat", key)) is not None:
         return hit
+    if (extra := POOLED.get()) is not None:
+        return _pooled_json(system, user, schema, key, role, name, extra)
 
     client = _client(base_url, api_key)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -104,3 +111,22 @@ def chat_json(role: str, system: str, user: str, schema: dict, name: str,
             if bad_json > 1:
                 break
     raise LLMError(f"{role} call failed: {last_err}")
+
+
+def _pooled_json(system: str, user: str, schema: dict, key: str, role: str, name: str, extra: list) -> dict[str, Any]:
+    """chat_json through the agent pool (POOLED). The schema goes in the prompt, not response_format,
+    so no endpoint rejects it for strict-mode rules; the reply is cached under chat_json's own key."""
+    from lore.llm.agent import agent_chat  # agent imports this module
+
+    msgs = [{"role": "system", "content": system},
+            {"role": "user", "content": user + "\n\nReply with one JSON object only, matching this JSON schema: "
+                                        + json.dumps(schema, sort_keys=True)}]
+    reply = agent_chat(msgs, extra_pool=extra)
+    text = _strip_fence(reply["content"])
+    try:
+        value = json.loads(text[text.find("{"):text.rfind("}") + 1])
+    except json.JSONDecodeError as e:
+        raise LLMError(f"{reply.get('endpoint')} returned no JSON object: {e}") from e
+    cache_put("chat", key, value, {"model": reply.get("model"), "endpoint": reply.get("endpoint"), "role": role,
+                                   "name": name, "at": int(time.time())})
+    return value
