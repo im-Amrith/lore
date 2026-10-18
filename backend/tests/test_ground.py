@@ -128,3 +128,25 @@ def test_why_lead_prefers_the_pr_decision_and_cites_the_same_choice_recorded_els
     lead = ground.why_lead([("trace_decision", {"decisions": [adr]}), ("trace_decision", {"decisions": [pr, other]})], known)
     assert lead["text"] == "Use a shared Redis link cache."
     assert lead["cites"] == ["decision:pr", "pr:x#11", "issue:x#1", "decision:adr", "doc:x:docs/adr/0001.md"]
+
+
+PEOPLE_TRACE = ("trace_decision", {"decisions": [{**TRACE[1]["decisions"][0], "people": [
+    {"id": "person:AviAvni", "login": "AviAvni", "role": "PROPOSED"},
+    {"id": "person:DvirDukhan", "login": "DvirDukhan", "role": "APPROVED"}]}]})
+
+
+def test_why_people_appended_only_when_nobody_is_named():
+    out = ground.why_people([s("It was slow.", "decision:aa")], [PEOPLE_TRACE], KNOWN)
+    assert out[-1] == s("Proposed by AviAvni; approved by DvirDukhan.", "decision:aa", "person:AviAvni", "person:DvirDukhan")
+    kept = [s("Avi Avni proposed it.", "decision:aa")]
+    assert ground.why_people(kept, [PEOPLE_TRACE], KNOWN) == kept
+
+
+def test_owns_listed_names_codeowners_owners_when_missing():
+    owners = ("module_owners", {"module": {"id": "module:lore-sandbox:analytics", "path": "analytics"},
+                                "owners": [{"id": "person:im-Angel2305", "kind": "Person", "name": "im-Angel2305"}]})
+    known = KNOWN | {"person:im-Angel2305"}
+    out = ground.owns_listed([s("Priya Raman does the work."), s("More.")], [owners], known)
+    assert out[1] == s("CODEOWNERS lists im-Angel2305 for analytics.", "codeowners", "person:im-Angel2305")
+    named = [s("CODEOWNERS lists im-Angel2305, but Priya does the work.")]
+    assert ground.owns_listed(named, [owners], known) == named

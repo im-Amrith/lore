@@ -552,7 +552,10 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
     if sentences and parsed.get("found", True):
         known = set(ev.nodes) | set(ev.sources)
         if final_intent == "why":
-            sentences = ground.add_lead(sentences, ground.why_lead(ev.results, known))
+            sentences = ground.why_people(ground.add_lead(sentences, ground.why_lead(ev.results, known)),
+                                          ev.results, known)
+        if final_intent == "owns":
+            sentences = ground.owns_listed(sentences, ev.results, known)
         sentences = ground.attach_mentions(sentences, final_intent, ev.results, known, ev.labels, _url_to_id)
         if final_intent in ground.PERSON_INTENTS:
             sentences = ground.module_first(sentences, ground.subject_module(ev.results), known)

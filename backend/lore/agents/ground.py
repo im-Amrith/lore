@@ -8,6 +8,8 @@ The LLM decides what to say; code makes sure what it says is tied to the graph:
     who/owns answer a person also gets their top evidence PR on the module, and an owner sentence
     always cites CODEOWNERS
   - module_first: a who/owns answer names the exact module path in its first sentence
+  - why_people / owns_listed: when the LLM left them out, one sentence naming who PROPOSED and
+    APPROVED the lead decision, or the module's CODEOWNERS owners
 Nothing here invents a node: every id it adds is one a tool returned for this question.
 """
 
@@ -146,3 +148,52 @@ def attach_mentions(sentences: list[dict[str, Any]], intent: str, results: list[
         added = [nid for _, ids in sorted(found, key=lambda f: f[0]) for nid in ids]
         out.append({**s, "cites": list(dict.fromkeys(list(s["cites"]) + added))})
     return out
+
+
+def _lead_decision(results: list[tuple[str, dict[str, Any]]], known: set[str]) -> dict[str, Any] | None:
+    active = [d for r in _results_of(results, "trace_decision") for d in r.get("decisions") or []
+              if d.get("status") == "active" and d.get("statement") and d.get("id") in known]
+    return next((d for d in active if any(str(s.get("id", "")).startswith("pr:") for s in d.get("sources") or [])),
+                active[0] if active else None)
+
+
+def _named(sentences: list[dict[str, Any]], name: str) -> bool:
+    pat = _name_pattern(name)
+    return bool(pat) and any(pat.search(s["text"]) for s in sentences)
+
+
+def why_people(sentences: list[dict[str, Any]], results: list[tuple[str, dict[str, Any]]],
+               known: set[str]) -> list[dict[str, Any]]:
+    """A why answer says who proposed and approved the lead decision (PROPOSED / APPROVED edges);
+    when the LLM left them out, code appends one sentence citing them."""
+    d = _lead_decision(results, known)
+    if not d:
+        return sentences
+    people = [p for p in d.get("people") or [] if p.get("id") in known and p.get("login")]
+    missing = [p for p in people if not _named(sentences, p["login"])]
+    if not people or len(missing) < len(people):
+        return sentences
+    parts = []
+    for role, verb in (("PROPOSED", "Proposed by"), ("APPROVED", "approved by")):
+        names = [p["login"] for p in people if p.get("role") == role]
+        if names:
+            parts.append(f"{verb} {', '.join(names)}")
+    if not parts:
+        return sentences
+    text = "; ".join(parts)
+    return sentences + [{"text": text[0].upper() + text[1:] + ".", "cites": [d["id"]] + [p["id"] for p in people]}]
+
+
+def owns_listed(sentences: list[dict[str, Any]], results: list[tuple[str, dict[str, Any]]],
+                known: set[str]) -> list[dict[str, Any]]:
+    """An owns answer names the CODEOWNERS owners of the module; when the LLM left them out, code adds
+    one sentence after the first, citing CODEOWNERS."""
+    for r in _results_of(results, "module_owners"):
+        owners = [o for o in r.get("owners") or [] if o.get("name")]
+        m = r.get("module") or {}
+        if not owners or not m.get("path") or any(_named(sentences, o["name"]) for o in owners):
+            continue
+        names = ", ".join(("@" if o.get("kind") == "Team" else "") + o["name"] for o in owners)
+        cites = [c for c in ["codeowners", *(o.get("id") for o in owners)] if c in known]
+        return sentences[:1] + [{"text": f"CODEOWNERS lists {names} for {m['path']}.", "cites": cites}] + sentences[1:]
+    return sentences
