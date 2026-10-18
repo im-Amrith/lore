@@ -8,15 +8,19 @@ import { Empty, ErrorBox, Loading, QueryToggle, useUser } from "@/components/Sta
 import { getHealth, getRisk, moduleHref, type RiskModule, type RiskPage } from "@/lib/api";
 import { shortLabel } from "@/lib/nodes";
 
-// Bus factor 1 = one person away from nobody knowing it.
-function tone(m: RiskModule) {
-  if (m.bus_factor <= 1) return { box: "border-miss-line bg-miss-soft", num: "text-miss" };
-  if (m.bus_factor === 2) return { box: "border-pending-line bg-pending-soft", num: "text-pending" };
-  return { box: "border-accent/25 bg-accent-soft", num: "text-accent-ink" };
-}
+// Bus factor 1 = one person away from nobody knowing it; 0 = nobody has authored a real share lately.
+const BANDS = [
+  { key: "none", label: "0 · no recent expert", box: "border-line bg-sunk", num: "text-muted" },
+  { key: "one", label: "1", box: "border-miss-line bg-miss-soft", num: "text-miss" },
+  { key: "two", label: "2", box: "border-pending-line bg-pending-soft", num: "text-pending" },
+  { key: "more", label: "3+", box: "border-accent/25 bg-accent-soft", num: "text-accent-ink" },
+] as const;
+
+const band = (m: RiskModule) => BANDS[Math.min(m.bus_factor, 3)];
+
 
 function Tile({ m, org }: { m: RiskModule; org: string }) {
-  const t = tone(m);
+  const t = band(m);
   return (
     <Link
       href={moduleHref(m.module_id, org)}
@@ -27,7 +31,8 @@ function Tile({ m, org }: { m: RiskModule; org: string }) {
         <span className="truncate font-mono text-[13px] text-ink">{shortLabel(m.module_id)}</span>
         <span className={`ml-auto shrink-0 text-lg font-semibold tabular-nums ${t.num}`}>{m.bus_factor}</span>
       </div>
-      <span className="truncate text-xs text-ink-2">
+      <span className={`truncate text-xs ${m.bus_factor ? "text-ink-2" : "text-muted"}`}>
+        {m.bus_factor === 0 && "no recent expert"}
         {m.experts.map((e, i) => `${e}${m.share_pct[i] != null ? ` ${m.share_pct[i]}%` : ""}`).join(", ")}
       </span>
       {m.owner_not_expert && m.owners?.length ? (
@@ -72,8 +77,11 @@ export function RiskView({ initialOrg }: { initialOrg?: string }) {
     router.replace(`/risk?org=${encodeURIComponent(id)}`, { scroll: false });
   }
 
-  const flagged = (risk?.modules ?? []).filter((m) => m.single_expert && m.owner_not_expert);
-  const rest = (risk?.modules ?? []).filter((m) => !(m.single_expert && m.owner_not_expert));
+  const all = risk?.modules ?? [];
+  const flagged = all.filter((m) => m.single_expert && m.owner_not_expert);
+  const rest = all.filter((m) => m.bus_factor > 0 && !(m.single_expert && m.owner_not_expert));
+  const dormant = all.filter((m) => m.bus_factor === 0);
+  const counts = BANDS.map((b) => ({ ...b, n: all.filter((m) => band(m).key === b.key).length }));
   const maxBridge = Math.max(1, ...(risk?.bridge_people ?? []).map((b) => b.score));
 
   return (
@@ -117,10 +125,12 @@ export function RiskView({ initialOrg }: { initialOrg?: string }) {
                     <h2 id="modules" className="text-sm font-medium text-ink">
                       {flagged.length ? "Other modules" : "Modules"}
                     </h2>
-                    <span className="flex items-center gap-3 text-xs text-muted">
-                      <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-miss-line bg-miss-soft" /> 1</span>
-                      <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-pending-line bg-pending-soft" /> 2</span>
-                      <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-accent/25 bg-accent-soft" /> 3+</span>
+                    <span className="flex flex-wrap items-center gap-3 text-xs text-muted">
+                      {counts.map((b) => (
+                        <span key={b.key} className="flex items-center gap-1">
+                          <span className={`h-2.5 w-2.5 rounded-sm border ${b.box}`} /> {b.label}: {b.n}
+                        </span>
+                      ))}
                     </span>
                   </div>
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -130,10 +140,18 @@ export function RiskView({ initialOrg }: { initialOrg?: string }) {
                   </div>
                 </section>
               )}
-              {risk.dormant_modules > 0 && (
-                <p className="mt-2 text-xs text-muted">
-                  {risk.dormant_modules} dormant modules (nobody authored a real share in the window) are left out.
-                </p>
+              {dormant.length > 0 && (
+                <section aria-labelledby="dormant" className="mt-6">
+                  <h2 id="dormant" className="text-sm font-medium text-ink">
+                    No recent expert ({dormant.length})
+                  </h2>
+                  <p className="text-xs text-muted">Nobody has authored a real share of these in the window; the code is there, the knowledge has gone quiet.</p>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {dormant.map((m) => (
+                      <Tile key={m.module_id} m={m} org={risk.org} />
+                    ))}
+                  </div>
+                </section>
               )}
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">

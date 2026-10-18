@@ -429,8 +429,12 @@ def module_owners(org: str, module: str) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- 5. knowledge_risk
 
-def knowledge_risk(org: str, repo: str | None = None) -> dict[str, Any]:
-    """Query 7 (bus factor) + query 8 (betweenness top 5, label-propagation working groups)."""
+def knowledge_risk(org: str, repo: str | None = None, max_modules: int | None = RISK_MAX_MODULES,
+                   dormant: bool = False) -> dict[str, Any]:
+    """Query 7 (bus factor) + query 8 (betweenness top 5, label-propagation working groups).
+
+    The agent gets the first max_modules modules with bus factor >= 1 (its context is small); the
+    risk screen passes max_modules=None and dormant=True to get every module, bus factor 0 included."""
     run = Run("knowledge_risk", org)
     repo_name = (repo or "").split("/")[-1]
     rows = run.ro("bus_factor", {"now": int(time.time()), "min_score": BUS_FACTOR_MIN_SCORE,
@@ -438,7 +442,7 @@ def knowledge_risk(org: str, repo: str | None = None) -> dict[str, Any]:
                                  "repo": repo_name})
     active = [r for r in rows if r["bus_factor"] > 0]
     modules = []
-    for r in active[:RISK_MAX_MODULES]:
+    for r in active[:max_modules] + ([r for r in rows if r["bus_factor"] == 0] if dormant else []):
         run.node(r["module_id"])
         for pid in r["expert_ids"]:
             run.edge(pid, "EXPERT_IN", r["module_id"])
@@ -455,6 +459,7 @@ def knowledge_risk(org: str, repo: str | None = None) -> dict[str, Any]:
         "repo": repo_name or None,
         "modules": modules,
         "single_expert_modules": [m["module"] for m in modules if m["single_expert"]],
+        "modules_total": len(active),
         # Single expert who isn't the CODEOWNERS owner: the knowledge sits where the listing doesn't point.
         "single_expert_not_owner": [m["module"] for m in modules if m["single_expert"] and m["owner_not_expert"]],
         "dormant_modules": len(rows) - len(active),

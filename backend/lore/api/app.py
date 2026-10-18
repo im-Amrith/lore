@@ -272,7 +272,7 @@ def module(module_id: str, org: str | None = Query(None, description="default: t
 @app.get("/risk", tags=["screens"], summary="Knowledge risk: bus factor per module, bridge people, working groups")
 def risk(org: str | None = None, repo: str | None = Query(None, description="limit modules to one repo")) -> dict[str, Any]:
     org = _org(org)
-    env = _run(tools.knowledge_risk, org, repo)
+    env = _run(tools.knowledge_risk, org, repo, None, True)  # every module, dormant ones too
     return {"org": org, **env["results"], "cypher": _cypher(env)}
 
 
