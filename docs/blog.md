@@ -1,14 +1,15 @@
 ---
 title: "Ask why, get the path: building a company brain on FalkorDB in 4 days"
-published: false
+published: true
 tags: falkordb, graphdatabase, ai, agents
 cover_image: https://raw.githubusercontent.com/im-Amrith/lore/main/docs/screenshots/ask-why.png
 ---
 
-<!-- Draft for Dev.to. TODOs in HTML comments are details only I can fill in. Dev.to doesn't render
+<!-- Published at https://dev.to/amrithesh_dev/ask-why-get-the-path-building-a-company-brain-on-falkordb-in-4-days-48if
+Draft source for Dev.to. TODOs in HTML comments are details only I can fill in. Dev.to doesn't render
 Mermaid: before publishing, swap the diagram for a screenshot of it from the GitHub README. -->
 
-**Repo:** https://github.com/im-Amrith/lore · **Live app:** https://lore-kappa-mauve.vercel.app · **Demo video:** _link coming_
+**Repo:** https://github.com/im-Amrith/lore · **Live app:** https://lore-kappa-mauve.vercel.app · **Demo video:** https://youtu.be/yq_YR116ClY
 
 ## A "why" that hides in plain sight
 

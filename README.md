@@ -8,7 +8,8 @@ Lore turns a public GitHub org's history into a company graph in FalkorDB, then 
 | --- | --- |
 | **Live app** | https://lore-kappa-mauve.vercel.app |
 | **API** | https://13-237-159-217.sslip.io/docs (OpenAPI) |
-| **Demo video** | _link coming_ |
+| **Demo video** | https://youtu.be/yq_YR116ClY |
+| **Blog post** | [Ask why, get the path: building a company brain on FalkorDB in 4 days](https://dev.to/amrithesh_dev/ask-why-get-the-path-building-a-company-brain-on-falkordb-in-4-days-48if) (Dev.to) |
 | **Tracks entered** | Company Brain · Agents That Act on Connected Data · Agent Memory and Coordination |
 | **Built for** | Graph Hacks (WeMakeDevs x FalkorDB), Oct 15-18, 2026 |
 
