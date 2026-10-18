@@ -239,26 +239,32 @@ Every Cypher query is a file in [`queries/`](queries/), loaded by name (no Cyphe
 
 [`docs/golden_set.yaml`](docs/golden_set.yaml) holds 10 hand-checked questions on FalkorDB (q01-q10), plus three sandbox checks (s01-s03) and a not-found test (n01). `scripts/eval.py` runs each through the Navigator and scores it deterministically, with no LLM judge: every `must_cite` URL cited, every key fact present, every shown sentence cited.
 
-**Run on the deployed server, 2026-10-18 06:04 UTC: golden q01-q10 7 of 10 pass; all checks 10 of 14.** Full answers: [docs/eval_results.md](docs/eval_results.md).
+**Final run on the deployed server, 2026-10-18 06:53 UTC, with no answer or LLM cache (`--all --no-cache`): golden q01-q10 10 of 10 pass; all checks 14 of 14.** Full answers: [docs/eval_results.md](docs/eval_results.md). **The golden questions, expected citations and key facts were not changed** between the two runs below; only the answer pipeline was.
 
-| id | type | question | result | why it failed |
+| id | type | question | first run (06:04 UTC) | final run (06:53 UTC) |
 | --- | --- | --- | --- | --- |
-| q01 | why | Why did the Rust engine drop all_nodes_matrix? | PASS | |
-| q02 | why | Why does the engine now fold MVCC deltas on every write? | PASS | |
-| q03 | why | Why are there two branches, main and master? | PASS | |
-| q04 | why | Why were graphblas.sh and redisearch.sh replaced with a native-deps crate? | FAIL | right decision and PR cited, but the answer leaves out two key facts (submodule, cache) |
-| q05 | who | Who should I ask about indexes in the Rust engine? | PASS | |
-| q06 | who | Who knows the Cypher parser? | FAIL | names the right experts but cites no evidence PR for AviAvni on graph/src/parser and doesn't name the module |
-| q07 | owns | Who owns the build folder, and who actually works on it? | PASS | |
-| q08 | owns | Who owns the query planner? | FAIL | correct facts, but CODEOWNERS was retrieved and not cited |
-| q09 | risk | Which parts of the engine depend on a single person? | PASS | |
-| q10 | impact | If we change the parser, what else usually has to change? | PASS | |
-| s01 | why | Why do we cache links in Redis? (sandbox) | FAIL | cites PR #11 and the ADR but not issue #1, which was retrieved |
-| s02 | owns | Who owns analytics? (sandbox) | PASS | |
-| s03 | risk | Which modules depend on one person? (sandbox) | PASS | |
-| n01 | not-found | Why was Bolt support removed? | PASS | says no reason was recorded and shows the nearest evidence |
+| q01 | why | Why did the Rust engine drop all_nodes_matrix? | PASS | PASS |
+| q02 | why | Why does the engine now fold MVCC deltas on every write? | PASS | PASS |
+| q03 | why | Why are there two branches, main and master? | PASS | PASS |
+| q04 | why | Why were graphblas.sh and redisearch.sh replaced with a native-deps crate? | FAIL | PASS |
+| q05 | who | Who should I ask about indexes in the Rust engine? | PASS | PASS |
+| q06 | who | Who knows the Cypher parser? | FAIL | PASS |
+| q07 | owns | Who owns the build folder, and who actually works on it? | PASS | PASS |
+| q08 | owns | Who owns the query planner? | FAIL | PASS |
+| q09 | risk | Which parts of the engine depend on a single person? | PASS | PASS |
+| q10 | impact | If we change the parser, what else usually has to change? | PASS | PASS |
+| s01 | why | Why do we cache links in Redis? (sandbox) | FAIL | PASS |
+| s02 | owns | Who owns analytics? (sandbox) | PASS | PASS |
+| s03 | risk | Which modules depend on one person? (sandbox) | PASS | PASS |
+| n01 | not-found | Why was Bolt support removed? | PASS | PASS |
 
-All four failures retrieved the right nodes; the misses are in what the answer-writing LLM chose to cite or mention. This run, 6 of 14 came from the answer cache and 2 from the LLM cache (both free); the 6 fresh answers took 4.2 s and 2.2 calls to the free-tier pool on average.
+The first run scored 7 of 10 golden (10 of 14 overall). All four failures had retrieved the right nodes; the answer-writing LLM left out a citation or a fact. They were fixed with deterministic grounding in code ([`backend/lore/agents/ground.py`](backend/lore/agents/ground.py), tested in `tests/test_ground.py`), applied after the LLM writes and adding only node ids this question's tools returned:
+
+- **Why answers** open with the traced decision's statement verbatim, cited to the decision, the source it was DECIDED_IN and the issues that source CLOSES. The Navigator always traces the top-ranked entry decision (and any in a near-tie with it, which is how a PR and its ADR recording the same choice show up), and names who PROPOSED and APPROVED it when the LLM didn't.
+- **Citation pass:** a sentence that names a person, module path, PR or issue number, or CODEOWNERS that the tools returned gets that node id; in who/owns answers a person also gets their top evidence PR on the module, and owner sentences cite CODEOWNERS.
+- **Who/owns answers** name the exact module path in the first sentence, and the CODEOWNERS owners when the LLM left them out.
+
+Agent calls run at temperature 0 with the same endpoint pool order for the eval and the live demo, and every answer records the model that wrote it. On the final run both Gemini flash models were out of their daily free quota, so the answers were written by `gemini-3.5-flash-lite` and Groq `gpt-oss-20b`: 2.6 s and 2.1 LLM calls per question on average.
 
 ## Setup
 
@@ -319,6 +325,7 @@ What we designed, verified and decided ourselves:
 - M10 API (`backend/lore/api/`, queries 13 and 14, `ingest/tasks.py`, `scripts/tasks.py`, API tests): written with Claude Code.
 - M15 Sync + supersession (`ingest/sync.py`, `scripts/sync.py`, queries 15 and the `$modules` / `$missing` scoping of 04, 10 and 21, query 93's merge counts, the pull_request webhook and poll check, the answer-rule for superseded decisions, `tests/test_sync.py`): written with Claude Code, tested on a copy of the sandbox graph in a separate test FalkorDB with a simulated merge. The supersession judgement runs on the free-tier agent pool; which decisions are compared is decided by the graph (same module and topic).
 - M12-lite Module + Risk pages and M16 polish (`frontend/app/module`, `frontend/app/risk`, `components/States.tsx`, module links from answers, loading/empty/error states; the repo-root module lookup fix in `resolve_module`) and `scripts/demo_reset.py` with queries 16: written with Claude Code; the reset was run on copies of the live graphs before the real graphs.
+- M16 answer grounding (`agents/ground.py`, the entry-decision trace in `navigator.py`, `tests/test_ground.py`): written with Claude Code after the first eval; the golden set was left unchanged and the fixes were checked by rerunning the four failures, then a full uncached eval.
 - M14 Deploy (`Dockerfile`, `deploy/docker-compose.yml`, `deploy/Caddyfile`, `deploy/ec2-setup.sh`, `scripts/snapshot.py`, `scripts/restore.py`, the deploy docs): written with Claude Code, including the free-host comparison that led to EC2.
 - M13 Steward (`agents/steward.py`, `ingest/live.py`, the work-board, intake and Playbook queries in 13, the work-board MCP tools, webhook, poll loop, approve with Feedback, real posting behind `DRY_RUN`, `scripts/steward.py`, the triage inbox screen, `tests/test_steward.py`): written with Claude Code. The related-issue distance (0.30) and reviewer threshold (0.1) were checked against the two demo issues on a copy of the sandbox graph. The drafts and the rules learned from edits are written by the free-tier agent pool; the owner, reviewer and related issues are picked by code from tool results.
 - M6 embeddings (`ingest/embed.py`, `graph/search.py`, queries 02, 09 and 21, `scripts/embed.py`, `scripts/find.py`): written with Claude Code, including the fusion tuning against q01-q04 and s01 (measured ranks are in `queries/02_entry_decisions.cypher`). Embeddings run locally with fastembed (`BAAI/bge-small-en-v1.5`).
@@ -327,7 +334,7 @@ What we designed, verified and decided ourselves:
 
 ## Known limitations
 
-- **Free-tier LLM quotas.** The agents use only free-tier Gemini and Groq keys. Under load an endpoint returns 429 or 503 and the pool moves to the next model; if all are cooling down, a new question gets a "try again in a minute" error. Cached demo answers are unaffected. Smaller fallback models also cite less thoroughly, which is behind most eval failures.
+- **Free-tier LLM quotas.** The agents use only free-tier Gemini and Groq keys. Under load an endpoint returns 429 or 503 and the pool moves to the next model; if all are cooling down, a new question gets a "try again in a minute" error. Cached demo answers are unaffected. Smaller fallback models also cite less thoroughly; the grounding pass in `ground.py` is what keeps their answers tied to the graph (the final eval ran on them).
 - **The sandbox is synthetic.** lore-sandbox was written for the demo, so its paper owners and the reversed Redis decision are planted. The FalkorDB graph is real, but only 3-4 people are active there, so most engine modules have a bus factor of 1 or 2. That's a real finding, not a bug.
 - **Confidence scores cluster high.** 221 of the 250 extracted decisions on FalkorDB have confidence 1.0, so the 0.6 cut-off mostly filters out obvious non-decisions rather than ranking the rest. Every decision keeps a verified source quote and link for that reason.
 - **Not built from the plan:** Discussions, SHIPPED_IN (releases are loaded but unlinked), the onboarding path (F7) and stale-knowledge alerts (F9). Team membership isn't public on FalkorDB, so team-owned modules show the team plus the active experts.
@@ -363,7 +370,7 @@ The Module page (`/module/<repo>/<path>`, from `GET /module/{id}`) puts the CODE
 
 ### Navigator
 
-`backend/lore/agents/navigator.py` answers a question through a real MCP client session with `lore-mcp` (stdio). It lists the server's tools and gives their schemas to the LLM, which comes from a pool of free-tier endpoints tried quality first (`AGENT_LLM_POOL`: gemini-3.8-flash, Groq gpt-oss-120b, gemini-3.6-flash, Groq gpt-oss-20b, gemini-3.5-flash-lite). A per-minute 429 cools an endpoint down for its retry-after and a daily quota marks it exhausted until its reset, so no endpoint is hammered; the state is shared across runs in `data/cache/llm/endpoint_state.json`. A question usually costs two LLM calls: call 1 picks every tool it needs at once (they run in parallel from the model's point of view), call 2 writes the answer; a third call happens only when every tool result came back empty. Answers are cached under the normalized question, the org, the graph's data version (the `data_version` tool, query 93, which changes after a load, sync or derive) and a hash of the prompts; `scripts/warm.py` pre-answers the demo questions. Tool results reach the LLM compacted (short field names, capped lists, no Cypher or embeddings; under ~4K tokens a call); the UI and eval get the full results. The loop: classify the intent (keyword rules, a hint only), always resolve names with `find_entities`, let the LLM pick up to three more tools (four calls per question in total), then a separate compose call with no tools and a strict JSON schema writes the answer as sentences, each citing node ids. Any cited id that no tool returned for this question is dropped, and a sentence left without a valid id is not shown. If nothing answers the question, the answer says "Not found" and shows the nearest evidence. `org` and `user_id` are filled in by code, never by the LLM, so a question can't read another org's graph or another user's memory. The answer, its citations, the subgraph, the path (edges touching a cited node) and every Cypher query that ran are returned, and the `remember` tool stores the question, answer and CITED edges (query 11 reads them back for "what changed since I last asked").
+`backend/lore/agents/navigator.py` answers a question through a real MCP client session with `lore-mcp` (stdio). It lists the server's tools and gives their schemas to the LLM, which comes from a pool of free-tier endpoints tried quality first (`AGENT_LLM_POOL`: gemini-3.8-flash, Groq gpt-oss-120b, gemini-3.6-flash, Groq gpt-oss-20b, gemini-3.5-flash-lite). A per-minute 429 cools an endpoint down for its retry-after and a daily quota marks it exhausted until its reset, so no endpoint is hammered; the state is shared across runs in `data/cache/llm/endpoint_state.json`. A question usually costs two LLM calls: call 1 picks every tool it needs at once (they run in parallel from the model's point of view), call 2 writes the answer; a third call happens only when every tool result came back empty. Answers are cached under the normalized question, the org, the graph's data version (the `data_version` tool, query 93, which changes after a load, sync or derive) and a hash of the prompts; `scripts/warm.py` pre-answers the demo questions. Tool results reach the LLM compacted (short field names, capped lists, no Cypher or embeddings; under ~4K tokens a call); the UI and eval get the full results. The loop: classify the intent (keyword rules, a hint only), always resolve names with `find_entities`, let the LLM pick up to three more tools (four calls per question in total), then a separate compose call with no tools and a strict JSON schema writes the answer as sentences, each citing node ids. Any cited id that no tool returned for this question is dropped, and a sentence left without a valid id is not shown. Then `ground.py` grounds the answer deterministically (see Eval): the why-lead, citations for every node a sentence names, the module path and listed owners in who/owns answers. If nothing answers the question, the answer says "Not found" and shows the nearest evidence. `org` and `user_id` are filled in by code, never by the LLM, so a question can't read another org's graph or another user's memory. The answer, its citations, the subgraph, the path (edges touching a cited node) and every Cypher query that ran are returned, and the `remember` tool stores the question, answer and CITED edges (query 11 reads them back for "what changed since I last asked").
 
 ### Steward
 
