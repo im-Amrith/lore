@@ -33,12 +33,14 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 from typing import Any, Callable
 
 import anyio
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
+from lore.agents import ground
 from lore.config import ANSWER_CACHE_DIR, BACKEND_DIR, NAVIGATOR_MAX_TOOL_CALLS, QUERIES_DIR
 from lore.llm.agent import agent_chat, flatten
 
@@ -287,6 +289,7 @@ class _Evidence:
         self.labels: dict[str, str] = {}  # node id -> a short human label (title, statement, login, path)
         self.decision_status: dict[str, str] = {}  # decision id -> active / proposed / superseded
         self.pending: set[str] = set()  # proposed decisions and the open/draft PRs they come from
+        self.results: list[tuple[str, dict[str, Any]]] = []  # (tool, full results), for ground.py
 
     def add(self, tool: str, args: dict[str, Any], env: dict[str, Any] | None, error: str | None) -> None:
         self.calls.append({"tool": tool, "args": args, "error": error})
@@ -300,6 +303,7 @@ class _Evidence:
             self.nodes.setdefault(e["target"])
         self.sources.update(env.get("sources", {}))
         self.cypher += [{"tool": tool, **c} for c in env.get("cypher", [])]
+        self.results.append((tool, env.get("results", {})))
         if tool == "find_entities" and not self.first:
             self.first = env.get("results", {})
         self._walk(env.get("results", {}))
@@ -375,7 +379,9 @@ QUERIES_VERSION = hashlib.sha256(b"".join(
 ).hexdigest()[:12]
 PROMPT_VERSION = hashlib.sha256(json.dumps(
     [SYSTEM, ANSWER_RULES, COMPOSE, ANSWER_SCHEMA, sorted(DROP_KEYS), RENAME, LIST_CAPS, NESTED_LIST_CAPS,
-     STR_CAPS, MAX_STR, NAVIGATOR_MAX_TOOL_CALLS, QUERIES_VERSION], sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
+     STR_CAPS, MAX_STR, NAVIGATOR_MAX_TOOL_CALLS, QUERIES_VERSION,
+     hashlib.sha256(Path(ground.__file__).read_bytes().replace(b"\r\n", b"\n")).hexdigest()],
+    sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
 
 
 def _cache_path(question: str, org: str, data_version: str):
@@ -510,6 +516,8 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
     compose = [{"role": "system", "content": COMPOSE}, *flatten(messages[1:])]
     reply = await chat(compose, json_schema=ANSWER_SCHEMA, step="write answer", use_cache=use_cache)
     model = model or reply["model"]
+    answer_model = reply.get("endpoint") or reply["model"]
+    log(f"  [answer] written by {answer_model}")
     parsed = _parse_answer(reply["content"]) or {
         "sentences": [], "found": False, "not_found": "the model returned no readable answer"}
     sentences, dropped = [], []
@@ -525,6 +533,15 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
                               **({"rejected_cites": bad} if bad else {})})
         else:
             dropped.append({"text": s["text"].strip(), "cites": raw})
+    # Step 5b: deterministic grounding (ground.py): the why-lead, mention citations, the module path.
+    final_intent = parsed.get("intent") or intent
+    if sentences and parsed.get("found", True):
+        known = set(ev.nodes) | set(ev.sources)
+        if final_intent == "why":
+            sentences = ground.add_lead(sentences, ground.why_lead(ev.results, known))
+        sentences = ground.attach_mentions(sentences, final_intent, ev.results, known, ev.labels, _url_to_id)
+        if final_intent in ground.PERSON_INTENTS:
+            sentences = ground.module_first(sentences, ground.subject_module(ev.results), known)
     found = bool(parsed.get("found", True)) and bool(sentences)
     not_found = str(parsed.get("not_found") or "").strip()
     if not found and not sentences:
@@ -547,6 +564,7 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
         "answer": text, "sentences": sentences, "dropped": dropped, "citations": citations,
         "subgraph": {"nodes": list(ev.nodes), "edges": list(ev.edges.values())}, "path": path,
         "sources": ev.sources, "cypher": ev.cypher, "tool_calls": ev.calls, "model": model,
+        "answer_model": answer_model,
         "llm_calls": llm_calls, "session_id": session_id,
         "labels": {n: ev.labels[n] for n in ev.nodes if n in ev.labels},
         "decision_status": ev.decision_status,
