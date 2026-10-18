@@ -21,8 +21,16 @@ MODULE_INTENTS = ("who-knows", "owns", "risk", "impact")
 _OWNER_WORDS = re.compile(r"\b(owns?|owned|owners?|codeowners|listed)\b", re.I)
 
 
+_DASHES = re.compile("[‐-―−]")
+
+
+def _plain(text: str) -> str:
+    """Models write non-breaking hyphens ("24‑hour", "im‑Angel2305") and spaces; match on plain ones."""
+    return _DASHES.sub("-", text).replace(" ", " ").replace(" ", " ")
+
+
 def _norm(s: str) -> str:
-    return re.sub(r"\s+", " ", s).strip().lower().rstrip(".")
+    return re.sub(r"\s+", " ", _plain(s)).strip().lower().rstrip(".")
 
 
 def _results_of(results: list[tuple[str, dict[str, Any]]], tool: str) -> list[dict[str, Any]]:
@@ -81,7 +89,7 @@ def module_first(sentences: list[dict[str, Any]], module: dict[str, str] | None,
 
 
 def _mentions_path(text: str, path: str) -> bool:
-    return re.search(rf"(?<![\w/]){re.escape(path)}(?![\w/])", text) is not None
+    return re.search(rf"(?<![\w/]){re.escape(path)}(?![\w/])", _plain(text)) is not None
 
 
 def _name_pattern(name: str) -> re.Pattern | None:
@@ -130,7 +138,7 @@ def attach_mentions(sentences: list[dict[str, Any]], intent: str, results: list[
 
     out = []
     for s in sentences:
-        text = s["text"]
+        text = _plain(s["text"])  # same length, so positions still order the cites
         found: list[tuple[int, list[str]]] = []  # (position in the text, ids), so cites follow the text
         for pid, pat in people:
             if m := pat.search(text):
@@ -159,7 +167,7 @@ def _lead_decision(results: list[tuple[str, dict[str, Any]]], known: set[str]) -
 
 def _named(sentences: list[dict[str, Any]], name: str) -> bool:
     pat = _name_pattern(name)
-    return bool(pat) and any(pat.search(s["text"]) for s in sentences)
+    return bool(pat) and any(pat.search(_plain(s["text"])) for s in sentences)
 
 
 def why_people(sentences: list[dict[str, Any]], results: list[tuple[str, dict[str, Any]]],
@@ -195,5 +203,10 @@ def owns_listed(sentences: list[dict[str, Any]], results: list[tuple[str, dict[s
             continue
         names = ", ".join(("@" if o.get("kind") == "Team" else "") + o["name"] for o in owners)
         cites = [c for c in ["codeowners", *(o.get("id") for o in owners)] if c in known]
-        return sentences[:1] + [{"text": f"CODEOWNERS lists {names} for {m['path']}.", "cites": cites}] + sentences[1:]
+        listed = {"text": f"CODEOWNERS lists {names} for {m['path']}.", "cites": cites}
+        # A sentence about CODEOWNERS that names nobody ("CODEOWNERS lists an owner") is replaced.
+        vague = next((i for i, s in enumerate(sentences) if re.search(r"codeowners", s["text"], re.I)), None)
+        if vague is not None:
+            return sentences[:vague] + [{**listed, "cites": list(dict.fromkeys(cites + sentences[vague]["cites"]))}] + sentences[vague + 1:]
+        return sentences[:1] + [listed] + sentences[1:]
     return sentences

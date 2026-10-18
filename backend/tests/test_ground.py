@@ -150,3 +150,24 @@ def test_owns_listed_names_codeowners_owners_when_missing():
     assert out[1] == s("CODEOWNERS lists im-Angel2305 for analytics.", "codeowners", "person:im-Angel2305")
     named = [s("CODEOWNERS lists im-Angel2305, but Priya does the work.")]
     assert ground.owns_listed(named, [owners], known) == named
+
+
+def test_add_lead_drops_a_repeat_written_with_non_breaking_hyphens():
+    lead = s("Use a shared Redis link cache with a 24-hour TTL.", "decision:aa")
+    out = ground.add_lead([s("Use a shared Redis link cache with a 24\u2011hour TTL.", "decision:aa")], lead)
+    assert out == [lead]
+
+
+def test_names_with_non_breaking_hyphens_still_match():
+    known = KNOWN | {"person:im-Angel2305"}
+    out = ground.attach_mentions([s("Ask im\u2011Angel2305.")], "why", [], known, {}, _url_to_id)
+    assert out[0]["cites"] == ["person:im-Angel2305"]
+
+
+def test_owns_listed_replaces_a_codeowners_sentence_that_names_nobody():
+    owners = ("module_owners", {"module": {"id": "module:lore-sandbox:analytics", "path": "analytics"},
+                                "owners": [{"id": "person:im-Angel2305", "kind": "Person", "name": "im-Angel2305"}]})
+    known = KNOWN | {"person:im-Angel2305"}
+    out = ground.owns_listed([s("CODEOWNERS lists an owner for analytics.", "codeowners"), s("Priya does the work.")],
+                             [owners], known)
+    assert [x["text"] for x in out] == ["CODEOWNERS lists im-Angel2305 for analytics.", "Priya does the work."]
