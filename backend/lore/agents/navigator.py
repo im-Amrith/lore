@@ -49,6 +49,9 @@ AGENT_TOOLS = ("find_entities", "trace_decision", "find_experts", "module_owners
                "related_work", "impact_radius", "recall")
 # question: trace_decision ranks linked issues by it. min_score (find_experts) is Steward's.
 HIDDEN_ARGS = ("org", "user_id", "question", "min_score")
+# Measured: the sandbox's PR #11 and ADR 0001 decisions are 0.0011 apart from "Why do we cache links in
+# Redis?"; on FalkorDB q01 the runner-up is 0.159 further than the top decision.
+ENTRY_TIE_DISTANCE = 0.02
 
 # Step 1. Checked in order; the first rule with a matching phrase wins.
 INTENT_RULES: list[tuple[str, tuple[str, ...]]] = [
@@ -379,7 +382,7 @@ QUERIES_VERSION = hashlib.sha256(b"".join(
 ).hexdigest()[:12]
 PROMPT_VERSION = hashlib.sha256(json.dumps(
     [SYSTEM, ANSWER_RULES, COMPOSE, ANSWER_SCHEMA, sorted(DROP_KEYS), RENAME, LIST_CAPS, NESTED_LIST_CAPS,
-     STR_CAPS, MAX_STR, NAVIGATOR_MAX_TOOL_CALLS, QUERIES_VERSION,
+     STR_CAPS, MAX_STR, NAVIGATOR_MAX_TOOL_CALLS, QUERIES_VERSION, ENTRY_TIE_DISTANCE, "entry-trace",
      hashlib.sha256(Path(ground.__file__).read_bytes().replace(b"\r\n", b"\n")).hexdigest()],
     sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
 
@@ -514,17 +517,24 @@ async def ask(question: str, org: str, user: str, client: Client, *, session_id:
 
     # Step 4b: a why answer always traces the top-ranked entry decision (query 2), even when the LLM
     # picked others, so the lead sentence (ground.why_lead) can rest on it.
-    top = next(iter(ev.first.get("decisions") or []), None)
+    # Entry decisions in a near-tie with the top one (vector distance within ENTRY_TIE_DISTANCE) are
+    # usually the same choice recorded twice (a PR and its ADR); they are traced too, budget permitting.
+    entries = ev.first.get("decisions") or []
+    top = entries[0] if entries else None
+    ties = [d for d in entries[1:3] if top and isinstance(d.get("distance"), (int, float))
+            and isinstance(top.get("distance"), (int, float)) and d["distance"] - top["distance"] <= ENTRY_TIE_DISTANCE]
     traced = {c["args"].get("node_id") for c in ev.calls if c["tool"] == "trace_decision"}
-    if intent == "why" and top and top.get("id") not in traced and used < NAVIGATOR_MAX_TOOL_CALLS:
-        targs = {"node_id": top["id"]}
+    for n, d in enumerate([top, *ties] if intent == "why" and top else []):
+        if d.get("id") in traced or used >= NAVIGATOR_MAX_TOOL_CALLS:
+            continue
+        targs = {"node_id": d["id"]}
         used += 1
-        log(f"  [tool {used}] trace_decision {targs} (top entry decision)")
+        log(f"  [tool {used}] trace_decision {targs} ({'top' if n == 0 else 'tied'} entry decision)")
         emit({"type": "tool", "n": used, "tool": "trace_decision", "args": targs})
         result = await _call(client, ev, "trace_decision", {**targs, "org": org, "question": question})
-        messages += [{"role": "assistant", "content": "", "tool_calls": [{"id": "call_top", "type": "function",
+        messages += [{"role": "assistant", "content": "", "tool_calls": [{"id": f"call_entry{n}", "type": "function",
                       "function": {"name": "trace_decision", "arguments": json.dumps(targs)}}]},
-                     {"role": "tool", "tool_call_id": "call_top", "content": json.dumps(result, default=str)}]
+                     {"role": "tool", "tool_call_id": f"call_entry{n}", "content": json.dumps(result, default=str)}]
 
     # Step 5: compose from the tool results (no tools offered), then keep only cites a tool returned.
     compose = [{"role": "system", "content": COMPOSE}, *flatten(messages[1:])]
