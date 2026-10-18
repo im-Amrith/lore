@@ -367,9 +367,11 @@ def normalize_question(question: str) -> str:
 
 
 # Any change to what the LLM is told or shown makes cached answers stale, and so does any change to
-# a query (a new ordering or field changes what the tools return for the same graph).
+# a query (a new ordering or field changes what the tools return for the same graph). The demo-reset
+# queries (16_demo_*) only touch memory and Tasks, never a tool's result, so they don't count.
 QUERIES_VERSION = hashlib.sha256(b"".join(
-    p.name.encode("utf-8") + p.read_bytes().replace(b"\r\n", b"\n") for p in sorted(QUERIES_DIR.glob("*.cypher")))
+    p.name.encode("utf-8") + p.read_bytes().replace(b"\r\n", b"\n") for p in sorted(QUERIES_DIR.glob("*.cypher"))
+    if not p.name.startswith("16_demo_"))
 ).hexdigest()[:12]
 PROMPT_VERSION = hashlib.sha256(json.dumps(
     [SYSTEM, ANSWER_RULES, COMPOSE, ANSWER_SCHEMA, sorted(DROP_KEYS), RENAME, LIST_CAPS, NESTED_LIST_CAPS,
