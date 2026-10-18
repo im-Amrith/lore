@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { AskResult, Citation, ProgressEvent, Sentence } from "@/lib/api";
+import { moduleHref, type AskResult, Citation, ProgressEvent, Sentence } from "@/lib/api";
 import { KIND_COLOR, kindOf, longLabel, shortLabel, truncate } from "@/lib/nodes";
 
 const INTENT_LABEL: Record<string, string> = {
@@ -85,6 +86,16 @@ function Sources({ r, onFocus }: { r: AskResult; onFocus: (id: string | null) =>
                 </a>
               ) : (
                 <span className="font-medium text-ink">{short}</span>
+              )}
+              {kindOf(c.id) === "module" && (
+                <Link
+                  href={moduleHref(c.id, r.org)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="ml-1.5 rounded bg-sunk px-1.5 py-0.5 text-[11px] font-medium text-accent-ink hover:bg-accent-soft"
+                  title="Owners vs experts, decisions and co-changed modules"
+                >
+                  module page →
+                </Link>
               )}
               {long && <span className="text-muted"> · {truncate(long, 110)}</span>}
               {status && status !== "active" && (

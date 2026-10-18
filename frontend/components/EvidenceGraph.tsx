@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Core, ElementDefinition } from "cytoscape";
-import type { AskResult } from "@/lib/api";
+import Link from "next/link";
+import { moduleHref, type AskResult } from "@/lib/api";
 import { layeredPositions } from "@/lib/layout";
 import { KIND_COLOR, KIND_NAME, kindOf, longLabel, shortLabel, type Kind } from "@/lib/nodes";
 
@@ -205,8 +206,13 @@ export function EvidenceGraph({
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: KIND_COLOR[kindOf(picked)] }} />
             <span className="font-medium text-ink">{shortLabel(picked, result.labels)}</span>
             <span className="truncate text-muted">{longLabel(picked, result.labels) ?? KIND_NAME[kindOf(picked)]}</span>
+            {kindOf(picked) === "module" && (
+              <Link href={moduleHref(picked, result.org)} className="ml-auto shrink-0 font-medium text-accent hover:underline">
+                Module page →
+              </Link>
+            )}
             {url && (
-              <a href={url} target="_blank" rel="noreferrer" className="ml-auto shrink-0 font-medium text-accent hover:underline">
+              <a href={url} target="_blank" rel="noreferrer" className={`${kindOf(picked) === "module" ? "" : "ml-auto "}shrink-0 font-medium text-accent hover:underline`}>
                 Open on GitHub ↗
               </a>
             )}

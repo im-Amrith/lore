@@ -10,6 +10,7 @@ export type Org = { id: string; label: string };
 const SCREENS = [
   { href: "/", label: "Ask" },
   { href: "/triage", label: "Triage" },
+  { href: "/risk", label: "Risk" },
 ];
 
 export function Header({

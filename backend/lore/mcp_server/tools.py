@@ -201,7 +201,10 @@ def _split(decisions: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
 
 def _resolve_module(run: Run, module: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """Module id / path / last segment -> (best match, other matches)."""
-    rows = run.ro("resolve_module", {"q": (module or "").strip().strip("/").lower() or "/", "limit": 5})
+    q = (module or "").strip().lower()
+    if not q.startswith("module:"):  # a full id keeps its slashes: the repo root is module:<repo>:/
+        q = q.strip("/") or "/"
+    rows = run.ro("resolve_module", {"q": q, "limit": 5})
     return (rows[0], rows[1:]) if rows else (None, [])
 
 

@@ -238,3 +238,100 @@ export const redraftTask = (issueNumber: number) =>
 
 export const approveTask = (issueNumber: number, body: { user: string; draft: string; rule?: string; passcode: string }) =>
   post(`/triage/${taskPath(issueNumber)}/approve`, body).then((r) => json<ApproveResult>(r));
+
+// ---------------------------------------------------------------- Module page and risk map (M12)
+
+export type DecisionRow = {
+  id: string;
+  statement: string;
+  status: "active" | "superseded" | "proposed" | string;
+  kind: string | null;
+  confidence?: number;
+  source_id?: string;
+  source_url: string | null;
+  superseded_by?: string | null;
+};
+
+export type ExpertRow = {
+  person_id: string;
+  person: string;
+  name: string | null;
+  score: number;
+  authored: number;
+  reviewed: number;
+  commits: number | null;
+  reviews: number | null;
+  last_touch: number | null;
+  evidence: string[];
+  evidence_reviews: string[];
+};
+
+/** A CODEOWNERS owner; paper = listed but hasn't worked on the module lately. */
+export type OwnerRef = { id: string; kind: "Person" | "Team" | string; name: string; members: number; paper: boolean };
+
+export type ModulePage = {
+  org: string;
+  module: { id: string; path: string; repo: string; rank?: number; activity?: number };
+  owners: {
+    listed_owner: boolean;
+    owners: OwnerRef[];
+    paper_owners: string[];
+    active_experts: { id: string; person: string; score: number; evidence: string[] }[];
+    top_expert_is_owner: boolean | null;
+    mismatch: boolean;
+    codeowners_url: string | null;
+    message?: string;
+  };
+  experts: ExpertRow[];
+  decisions: { decisions: DecisionRow[]; pending_proposals: DecisionRow[]; history: DecisionRow[] };
+  co_changed: {
+    module_id: string;
+    module: string;
+    count: number;
+    share_pct: number;
+    experts: { id: string; person: string; score: number }[];
+    decisions: DecisionRow[];
+  }[];
+  sources: Record<string, string>;
+  cypher: CypherRun[];
+};
+
+export type RiskModule = {
+  module_id: string;
+  module: string;
+  bus_factor: number;
+  experts: string[];
+  expert_ids: string[];
+  share_pct: number[];
+  total_score: number;
+  owners?: string[];
+  owner_not_expert?: boolean;
+  single_expert: boolean;
+};
+
+export type RiskPage = {
+  org: string;
+  repo: string | null;
+  modules: RiskModule[];
+  single_expert_modules: string[];
+  single_expert_not_owner?: string[];
+  dormant_modules: number;
+  bridge_people: { person: string; id: string; score: number }[];
+  working_groups: { group_id: number; size: number; members: string[]; member_ids: string[] }[];
+  thresholds: { min_score: number; min_share: number; window_days: number };
+  cypher: CypherRun[];
+};
+
+export const getModule = (id: string, org?: string) =>
+  fetch(`${API_URL}/module/${id.split("/").map(encodeURIComponent).join("/")}${org ? `?org=${encodeURIComponent(org)}` : ""}`).then(
+    (r) => json<ModulePage>(r),
+  );
+
+export const getRisk = (org: string) => fetch(`${API_URL}/risk?org=${encodeURIComponent(org)}`).then((r) => json<RiskPage>(r));
+
+/** The UI route for a module id: module:<repo>:<path> -> /module/<repo>/<path>?org=<org>. */
+export function moduleHref(id: string, org?: string): string {
+  const [, repo, ...rest] = id.split(":");
+  const path = rest.join(":").replace(/^\/$/, "");
+  return `/module/${[repo, ...path.split("/").filter(Boolean)].map(encodeURIComponent).join("/")}${org ? `?org=${encodeURIComponent(org)}` : ""}`;
+}

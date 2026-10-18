@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnswerCard, ProgressCard } from "@/components/Answer";
 import { EvidenceGraph } from "@/components/EvidenceGraph";
 import { Header, type Org } from "@/components/Header";
+import { ErrorBox } from "@/components/States";
 import { ApiError, askStream, getHealth, type AskResult, type ProgressEvent } from "@/lib/api";
 import { EXAMPLES } from "@/lib/examples";
 
@@ -47,7 +48,8 @@ export default function AskPage() {
   const [busy, setBusy] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  function connect() {
+    setApiDown(null);
     getHealth()
       .then((h) => {
         const sandboxOwner = h.sandbox_repo?.split("/")[0];
@@ -60,6 +62,10 @@ export default function AskPage() {
         setOrg(list.find((o) => o.id === saved)?.id ?? list[0]?.id ?? "");
       })
       .catch((e) => setApiDown(e instanceof Error ? e.message : String(e)));
+  }
+
+  useEffect(() => {
+    connect();
     setUser(store.get("lore.user"));
   }, []);
 
@@ -119,9 +125,8 @@ export default function AskPage() {
       <Header orgs={orgs} org={org} onOrg={chooseOrg} user={user} onUser={chooseUser} />
 
       {apiDown && (
-        <div className="border-b border-miss-line bg-miss-soft px-5 py-2 text-sm text-miss">
-          Can&rsquo;t reach the Lore API ({apiDown}). Start it with{" "}
-          <code className="font-mono text-xs">uvicorn lore.api.app:app --port 8000</code>.
+        <div className="border-b border-miss-line px-5 py-2">
+          <ErrorBox title="Can't reach the Lore API." message={apiDown} onRetry={connect} />
         </div>
       )}
 
@@ -131,7 +136,18 @@ export default function AskPage() {
         {/* Chat */}
         <section className="flex flex-col border-line lg:min-h-0 lg:border-r" aria-label="Questions and answers">
           <div className="scroll-quiet space-y-5 px-5 py-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-            {turns.length === 0 ? (
+            {turns.length === 0 && !org ? (
+              <p className="mx-auto flex max-w-md items-center gap-2 pt-10 text-sm text-muted" aria-live="polite">
+                {apiDown ? (
+                  "The API is unreachable, so there is nothing to ask yet."
+                ) : (
+                  <>
+                    <span className="pulse-dot h-2 w-2 rounded-full bg-accent" />
+                    Connecting to the graph…
+                  </>
+                )}
+              </p>
+            ) : turns.length === 0 ? (
               <div className="mx-auto max-w-md pt-10">
                 <h1 className="font-serif text-[28px] leading-tight text-ink">
                   Ask about {sandboxLabel ?? org}&rsquo;s history.
@@ -168,7 +184,7 @@ export default function AskPage() {
                       onFocus={setFocusId}
                     />
                   ) : t.error ? (
-                    <div className="rounded-xl border border-miss-line bg-miss-soft px-5 py-3 text-sm text-miss">{t.error}</div>
+                    <ErrorBox title="No answer." message={t.error} onRetry={busy ? undefined : () => ask(t.question)} />
                   ) : (
                     <ProgressCard events={t.events} startedAt={t.startedAt} />
                   )}

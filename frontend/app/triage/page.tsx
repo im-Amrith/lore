@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/components/Header";
 import { TriageCard } from "@/components/TriageCard";
+import { ErrorBox, Loading } from "@/components/States";
 import { getPlaybook, getTriage, syncTriage, type Playbook, type TriageInbox } from "@/lib/api";
 
 const REFRESH_MS = 8000; // the inbox re-reads the work board; Steward itself runs in the API
@@ -151,8 +152,8 @@ export default function TriagePage() {
         )}
 
         {error && (
-          <div className="mt-4 rounded-lg border border-miss-line bg-miss-soft px-4 py-2.5 text-sm text-miss">
-            Can&rsquo;t load the inbox: {error}
+          <div className="mt-4">
+            <ErrorBox title="Can't load the inbox." message={error} onRetry={refresh} />
           </div>
         )}
         {inbox?.steward.last_error && (
@@ -162,6 +163,7 @@ export default function TriagePage() {
         )}
 
         <div className="mt-5 space-y-4">
+          {!inbox && !error && <Loading what="Reading Steward's work board…" rows={2} />}
           {inbox && items.length === 0 && (
             <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
               <p className="text-[15px] text-ink-2">Nothing to triage.</p>
